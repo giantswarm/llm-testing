@@ -1,0 +1,101 @@
+ID,Section,Question,ExpectedAnswer
+1,Setup & Aliases,What is the command to create a shortcut alias 'k' for kubectl?,alias k=kubectl
+2,Setup & Aliases,How do you enable bash autocompletion for the 'k' alias (for kubectl)?,complete -F __start_kubectl k
+3,Imperative Commands,What kubectl flag(s) allows you to generate YAML without creating the object?,--dry-run=client -o yaml
+4,Core Concepts,How do you delete a pod 'mypod' instantly (force delete)?,kubectl delete pod mypod --force --grace-period=0
+5,Core Concepts,What command displays all pods across every namespace?,`kubectl get pods -A` or `kubectl get pods --all-namespaces`
+6,Core Concepts,How do you view the documentation for the 'Pod' resource fields?,kubectl explain pod --recursive
+7,Cluster Config,What command shows the current context of the cluster?,kubectl config current-context
+8,Cluster Config,How do you switch to a different context named 'mycontext'?,kubectl config use-context mycontext
+9,Cluster Config,Which command lists all available contexts in kubeconfig?,kubectl config get-contexts
+10,Core Concepts,How do you run a temporary pod named 'test' with an nginx image?,kubectl run test --image=nginx --rm -it -- restart=Never -- sh
+11,Scheduling,What command labels a node named mynode with 'disk=ssd'?,kubectl label node mynode disk=ssd
+12,Scheduling,How do you remove a label 'disk' from a node named mynode?,kubectl label node mynode disk-
+13,Monitoring,What command shows the resource usage (CPU/Mem) of pods?,kubectl top pod
+14,Workloads,How do you scale a deployment 'web' to 5 replicas?,kubectl scale deployment web --replicas=5
+15,Workloads,What is the command to check the rollout status of a deployment named mydeployment?,kubectl rollout status deployment mydeployment
+16,Workloads,How do you rollback a deployment named mydeployment to its previous version?,kubectl rollout undo deployment mydeployment
+17,Workloads,How do you check the rollout history of a deployment named mydeployment?,kubectl rollout history deployment mydeployment
+18,Workloads,What command updates the image of a deployment 'web' to 'nginx:1.18'?,kubectl set image deployment/web nginx=nginx:1.18
+19,Networking,How do you expose a deployment 'web' as a NodePort service on port 80?,kubectl expose deployment web --type=NodePort --port=80
+20,Config & Secrets,What command creates a configmap from a literal value?,kubectl create configmap <name> --from-literal=key=value
+21,Config & Secrets,How do you create a secret from a text file ./myfile.txt?,kubectl create secret generic <name> --from-file=./myfile.txt
+22,Logging,How do you view the logs of a pod named 'app'?,kubectl logs app
+23,Logging,How do you stream the logs of a pod in real-time?,kubectl logs -f app
+24,Logging,What command shows logs for a pod named mypod with multiple containers for container mycontainer?,kubectl logs mypod -c mycontainer
+25,Troubleshooting,How do you execute a shell command inside a running pod named mypod?,kubectl exec mypod -- <command>
+26,Troubleshooting,How do you get an interactive shell inside a running pod named mypod?,kubectl exec -it mypod -- sh
+27,Maintenance,What command is used to drain a node named mynode for maintenance?,kubectl drain mynode --ignore-daemonsets
+28,Maintenance,How do you mark a node named mynode as unschedulable without draining?,kubectl cordon mynode
+29,Maintenance,How do you make a cordoned node named mynode schedulable again?,kubectl uncordon mynode
+30,Etcd Backup,What command is used to back up an etcd snapshot?,etcdctl snapshot save <file-path>
+31,Etcd Backup,How do you check the status of an etcd snapshot?,etcdctl snapshot status <file-path>
+32,Etcd Backup,What etcdctl flag is used to restore an etcd snapshot to a specific directory?,--data-dir <directory-path>
+33,Core Concepts,How do you identify which node a pod named mypod is running on?,kubectl get pod mypod -o wide
+34,Scheduling,Where are the static pod manifest files usually stored?,/etc/kubernetes/manifests
+35,Scheduling,What component is responsible for managing static pods?,The kubelet service
+36,Troubleshooting,How do you restart the kubelet service on a node?,systemctl restart kubelet
+37,Core Concepts,What command shows the details of a specific node named mynode?,kubectl describe node mynode
+38,Networking,How do you list all services in the 'finance' namespace?,kubectl get svc -n finance
+39,Core Concepts,What is the command to create a new namespace named 'abc'?,kubectl create namespace abc
+40,Security,How do you create a service account named 'monitor'?,kubectl create serviceaccount monitor
+41,Security,How do you check if you have permission to delete pods?,kubectl auth can-i delete pods
+42,Security,How do you check if service account 'mysa' in namespace 'abc' can list secrets?,kubectl auth can-i list secrets --as system:serviceaccount:abc:mysa
+43,Security,What command creates a Role 'podlister' in a namespace 'abc' with permission to list pods?,"kubectl create role podlister --verb=list --resource=pods --namespace=abc"
+44,Security,How do you bind a Role 'podlister' to a User 'myuser'?,kubectl create rolebinding <name> --role=podlister --user=myuser
+45,Security,What command creates a ClusterRole for listing and inspecting nodes?,"kubectl create clusterrole <name> --verb=get,list --resource=nodes"
+46,Scheduling,What is the purpose of a Taint on a node?,To prevent pods from scheduling unless they have a matching toleration.
+47,Scheduling,How do you add a taint 'app=blue:NoSchedule' to a node named 'mynode'?,kubectl taint nodes mynode app=blue:NoSchedule
+48,Scheduling,How do you remove a taint 'app=blue:NoSchedule' from a node named 'mynode'?,kubectl taint nodes mynode app=blue:NoSchedule-
+49,Scheduling,What field in a Pod spec allows it to run on a tainted node?,tolerations
+50,Scheduling,What field in a Pod spec forces it to run on a specific node?,nodeName
+51,Scheduling,How do you use labels to restrict pod scheduling?,nodeSelector
+52,Scheduling,What is a more expressive way for restricting pod scheduling than nodeSelector?,nodeAffinity
+53,Scheduling,Which field ensures pods are spread across nodes/zones?,topologySpreadConstraints
+54,Troubleshooting,What command allows you to view the events in the default namespace?,kubectl get events
+55,Imperative Commands,How do you sort pods by their restart count?,kubectl get pods --sort-by='.status.containerStatuses[0].restartCount'
+56,Workloads,What is the command to create a CronJob that should run 10 minutes past every 2nd hour?,"kubectl create cronjob <name> --image=<image> --schedule=""10 */2 * * *"""
+57,Workloads,How do you create a Job named 'myjob' from a CronJob named 'mycronjob' using kubectl?,kubectl create job --from=cronjob/mycronjob myjob
+58,Core Concepts,What command allows you to edit a resource live?,kubectl edit <resource-type> <name>
+59,Core Concepts,How do you list all API resources supported?,kubectl api-resources
+60,Core Concepts,How do you list all API versions?,kubectl api-versions
+61,Networking,What is the command to create a ClusterIP service to explose port 80?,kubectl create service clusterip <name> --tcp=80:80
+62,Troubleshooting,What command port-forwards a local port 8080 to a pod's port 8080?,kubectl port-forward <pod-name> 8080:80
+63,Networking,How do you find the internal IP address of nodes?,kubectl get nodes -o wide
+64,Security,What command describes the current quota in a namespace?,kubectl describe quota
+65,Security,How do you create a ResourceQuota with 1 core and 1G RAM?,"kubectl create quota <name> --hard=cpu=1,memory=1G"
+66,Workloads,What is the default update strategy for a Deployment?,RollingUpdate
+67,Networking,What is the command to create an Ingress resource?,"kubectl create ingress <name> --rule=""host/path=svc:port"""
+68,Core Concepts,How do you check the version of the Kubernetes server?,kubectl version
+69,Cluster Upgrade,What is the command to upgrade kubeadm, e.g. to version 1.24.0?,apt-get install -y kubeadm=1.24.0-00
+70,Cluster Upgrade,What command prepares a node for upgrade?,kubeadm upgrade plan
+71,Cluster Upgrade,What command executes the upgrade on a control plane?,kubeadm upgrade apply <version>
+72,Cluster Upgrade,How do you upgrade kubelet and kubectl?,apt-get install -y kubelet=<version> kubectl=<version>
+73,Setup & Aliases,How do you see the help for 'kubectl run'?,kubectl run --help
+74,Storage,How do you list all PersistentVolumes (PVs)?,kubectl get pv
+75,Storage,How do you list all PersistentVolumeClaims (PVCs)?,kubectl get pvc
+76,Storage,What field in a PVC binds it to a specific PV?,volumeName
+77,Storage,What command shows available storage classes?,kubectl get sc
+78,Security,How do you define a Pod to run as user 1000?,securityContext: runAsUser: 1000
+79,Security,What command manages certificates in K8s?,kubectl certificates
+80,Security,How do you approve a CSR?,kubectl certificate approve <name>
+81,Logging,How do you view previous logs of a crashed pod?,kubectl logs <name> --previous
+82,Maintenance,Where is the Kubelet config file usually located?,/var/lib/kubelet/config.yaml
+83,Troubleshooting,How do you check the status of containerd?,systemctl status containerd
+84,Troubleshooting,What command lists all containers on a node?,crictl ps -a
+85,Troubleshooting,What command retrieves logs via crictl?,crictl logs <container-id>
+86,Troubleshooting,How do you find the PID of kube-apiserver?,ps -ef
+87,Troubleshooting,Where are log files for control plane pods?,/var/log/pods
+88,Networking,How do you check network policies?,kubectl get netpol
+89,Networking,What does an empty 'podSelector' in netpol mean?,It applies to all pods in the namespace
+90,Networking,How do you find the pod CIDR of a node?,kubectl describe node
+91,Networking,What tool to use for troubleshooting DNS inside a pod?,nslookup or dig
+92,Networking,Where is DNS configuration inside a container?,/etc/resolv.conf
+93,Networking,What service handles DNS in the cluster?,CoreDNS
+94,Workloads,How do you scale a StatefulSet to 5 replicas?,kubectl scale statefulset <name> --replicas=5
+95,Troubleshooting,How do you see events for a specific pod?,Run `kubectl describe pod <name>` and check the Events section
+96,Imperative Commands,How do you list all images in a namespace 'myns'?,kubectl get pods -o jsonpath='{..image}' -n myns
+97,Scheduling,What command creates a priority class with a value of 1000?,kubectl create priorityclass <name> --value=1000
+98,Scheduling,How do you set a pod's priority?,priorityClassName: <name>
+99,Troubleshooting,How do you check the health of components?,kubectl get componentstatuses
+100,Maintenance,What is the final step to finish a node upgrade?,kubectl uncordon <node-name>
