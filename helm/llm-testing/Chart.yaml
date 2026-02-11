@@ -1,0 +1,9 @@
+apiVersion: v2
+name: llm-testing
+description: LLM evaluation testing framework with MCP server and KServe integration
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/giantswarm/llm-testing
+sources:
+  - https://github.com/giantswarm/llm-testing

@@ -1,0 +1,164 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string" },
+        "tag": { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "namespace": { "type": "string" },
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "server": {
+      "type": "object",
+      "properties": {
+        "transport": { "type": "string", "enum": ["stdio", "streamable-http"] },
+        "httpAddr": { "type": "string" },
+        "httpEndpoint": { "type": "string" },
+        "inCluster": { "type": "boolean" },
+        "outputDir": { "type": "string" },
+        "suitesDir": { "type": "string" },
+        "debug": { "type": "boolean" }
+      }
+    },
+    "oauth": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "baseURL": { "type": "string" },
+        "provider": { "type": "string" },
+        "dexIssuerURL": { "type": "string" },
+        "dexClientID": { "type": "string" },
+        "dexClientSecret": { "type": "string" },
+        "existingSecret": { "type": "string" }
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "description": "Default model for LLM-as-judge scoring" },
+        "endpoint": { "type": "string", "description": "Optional default OpenAI-compatible endpoint for scoring" },
+        "apiKey": { "type": "string", "description": "Optional API key for the scoring endpoint" },
+        "existingSecret": { "type": "string", "description": "Existing secret containing key 'api-key' used as OPENAI_API_KEY" }
+      }
+    },
+    "kserve": {
+      "type": "object",
+      "properties": {
+        "namespace": { "type": "string" }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "storageClass": { "type": "string" },
+        "size": { "type": "string" },
+        "accessModes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" }
+      }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "port": { "type": "integer" }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "annotations": { "type": "object" },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "host": { "type": "string" },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": { "type": "string" },
+                    "pathType": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tls": { "type": "array" }
+      }
+    },
+    "nodeSelector": { "type": "object" },
+    "tolerations": { "type": "array" },
+    "affinity": { "type": "object" },
+    "securityContext": {
+      "type": "object",
+      "properties": {
+        "runAsNonRoot": { "type": "boolean" },
+        "runAsUser": { "type": "integer" },
+        "runAsGroup": { "type": "integer" },
+        "fsGroup": { "type": "integer" },
+        "seccompProfile": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" }
+          }
+        }
+      }
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "properties": {
+        "readOnlyRootFilesystem": { "type": "boolean" },
+        "allowPrivilegeEscalation": { "type": "boolean" },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "drop": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

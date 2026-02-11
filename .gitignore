@@ -1,27 +1,21 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-.venv/
-env/
-venv/
-.ruff_cache
-
-# Results
+# Results directory
 results/
 
-# Environment
-.env
+# Go binary
+/llm-testing
+dist/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.test
+*.out
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
-Thumbs.db

@@ -1,0 +1,100 @@
+image:
+  repository: gsoci.azurecr.io/giantswarm/llm-testing
+  tag: ""  # defaults to chart appVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+namespace: llm-testing
+
+# MCP server configuration.
+server:
+  transport: streamable-http
+  httpAddr: ":8080"
+  httpEndpoint: /mcp
+  inCluster: true
+  outputDir: /data/results
+  suitesDir: ""
+  debug: false
+
+# Scoring configuration.
+scoring:
+  # Default model used for LLM-as-judge scoring.
+  model: claude-sonnet-4-5-20250514
+  # Optional default OpenAI-compatible endpoint for scoring.
+  endpoint: ""
+  # Optional API key for scoring endpoint (prefer existingSecret in production).
+  apiKey: ""
+  # Existing secret containing key `api-key` used as OPENAI_API_KEY.
+  existingSecret: ""
+
+# OAuth 2.1 configuration.
+oauth:
+  enabled: false
+  baseURL: ""
+  provider: dex
+  dexIssuerURL: ""
+  dexClientID: ""
+  dexClientSecret: ""
+  # Reference to an existing secret with OAuth credentials.
+  existingSecret: ""
+
+# KServe InferenceService management.
+kserve:
+  # Namespace where InferenceService resources are created.
+  # Defaults to the release namespace.
+  namespace: ""
+
+# Persistence for results storage.
+persistence:
+  enabled: false
+  storageClass: ""
+  size: 10Gi
+  accessModes:
+    - ReadWriteOnce
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: llm-testing.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
