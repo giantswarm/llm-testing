@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/giantswarm/llm-testing/internal/llm"
 	"github.com/giantswarm/llm-testing/internal/server"
 )
 
@@ -70,6 +72,22 @@ func TestHandleRunTestSuiteInvalidSuite(t *testing.T) {
 	assert.Contains(t, content.Text, "failed to load test suite")
 }
 
+func TestHandleRunTestSuiteInvalidModelsJSON(t *testing.T) {
+	sc := &server.ServerContext{}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"test_suite": "kubernetes-cka-v2",
+		"models":     "not valid json",
+	}
+
+	result, err := handleRunTestSuite(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "invalid models JSON")
+}
+
 func TestHandleScoreResultsMissingRequired(t *testing.T) {
 	sc := &server.ServerContext{
 		LLMClient: nil, // No client configured.
@@ -101,6 +119,63 @@ func TestHandleScoreResultsNoClient(t *testing.T) {
 
 	content := result.Content[0].(mcp.TextContent)
 	assert.Contains(t, content.Text, "LLM client is not configured")
+}
+
+func TestHandleScoreResultsNeitherRunIDNorFile(t *testing.T) {
+	sc := &server.ServerContext{
+		LLMClient: &mockLLMClient{},
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{}
+
+	result, err := handleScoreResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "either 'run_id' or 'results_file' is required")
+}
+
+func TestHandleScoreResultsByRunIDNotFound(t *testing.T) {
+	sc := &server.ServerContext{
+		LLMClient: &mockLLMClient{},
+		OutputDir: "/nonexistent/path",
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"run_id": "nonexistent-run",
+	}
+
+	result, err := handleScoreResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "run \"nonexistent-run\" not found")
+}
+
+func TestHandleScoreResultsByRunIDNoResultFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	runDir := filepath.Join(tmpDir, "test-run")
+	require.NoError(t, os.MkdirAll(runDir, 0o755))
+	// Create a resultset.json but no .txt files.
+	require.NoError(t, os.WriteFile(filepath.Join(runDir, "resultset.json"), []byte(`{}`), 0o644))
+
+	sc := &server.ServerContext{
+		LLMClient: &mockLLMClient{},
+		OutputDir: tmpDir,
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"run_id": "test-run",
+	}
+
+	result, err := handleScoreResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "no result files found")
 }
 
 func TestHandleGetResultsEmptyDir(t *testing.T) {
@@ -226,4 +301,15 @@ func TestHandleDeployModelNoManagerTakesPrecedence(t *testing.T) {
 
 	content := result.Content[0].(mcp.TextContent)
 	assert.Contains(t, content.Text, "KServe manager is not configured")
+}
+
+// mockLLMClient is a minimal mock for tests that need a non-nil LLMClient.
+type mockLLMClient struct{}
+
+func (m *mockLLMClient) ChatCompletion(_ context.Context, _ llm.ChatRequest) (*llm.ChatResponse, error) {
+	return &llm.ChatResponse{Content: "mock response"}, nil
+}
+
+func (m *mockLLMClient) ChatCompletionStream(_ context.Context, _ llm.ChatRequest) (*llm.StreamReader, error) {
+	return nil, fmt.Errorf("streaming not supported in mock")
 }

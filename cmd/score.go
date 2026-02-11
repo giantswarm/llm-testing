@@ -66,15 +66,25 @@ JSON scores.`,
 
 			fmt.Printf("\nScores written to: %s\n", scoresFile)
 
-			if output.Summary.MeanCorrect != nil {
+			if output.Summary.MeanCorrect != nil && output.Summary.MeanPercent != nil {
 				fmt.Printf("\nSummary:\n")
+				// Find the total from the first run that was successfully parsed.
+				var total int
+				for _, r := range output.Runs {
+					if r.Total != nil {
+						total = *r.Total
+						break
+					}
+				}
 				fmt.Printf("  Mean Score: %.2f/%d (%.2f%%)\n",
 					*output.Summary.MeanCorrect,
-					*output.Runs[0].Total,
+					total,
 					*output.Summary.MeanPercent)
-				fmt.Printf("  Range: %d-%d correct\n",
-					*output.Summary.MinCorrect,
-					*output.Summary.MaxCorrect)
+				if output.Summary.MinCorrect != nil && output.Summary.MaxCorrect != nil {
+					fmt.Printf("  Range: %d-%d correct\n",
+						*output.Summary.MinCorrect,
+						*output.Summary.MaxCorrect)
+				}
 			}
 
 			return nil

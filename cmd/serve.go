@@ -73,9 +73,15 @@ When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 			// Create KServe manager if in-cluster or kubeconfig is available.
 			ksManager, err := kserve.NewManager(namespace, kubeconfig, inCluster)
 			if err != nil {
-				slog.Warn("KServe manager not available", "error", err)
+				slog.Warn("KServe manager not available, no Kubernetes access", "error", err)
 			} else {
-				sc.KServeManager = ksManager
+				// Verify that the KServe InferenceService CRD is installed.
+				if err := ksManager.CheckCRDAvailable(cmd.Context()); err != nil {
+					slog.Warn("KServe CRDs not installed in cluster, model management tools will be unavailable", "error", err)
+				} else {
+					sc.KServeManager = ksManager
+					slog.Info("KServe InferenceService CRD detected, model management enabled")
+				}
 			}
 
 			// Create default LLM client (for scoring; test runs may use different endpoints).

@@ -66,6 +66,18 @@ func NewManagerWithClient(client dynamic.Interface, namespace string) *Manager {
 	}
 }
 
+// CheckCRDAvailable verifies that the InferenceService CRD is installed in the cluster.
+// Returns nil if the CRD is available, or an error describing why it is not.
+func (m *Manager) CheckCRDAvailable(ctx context.Context) error {
+	_, err := m.client.Resource(isvcGVR).Namespace(m.namespace).List(ctx, metav1.ListOptions{
+		Limit: 1,
+	})
+	if err != nil {
+		return fmt.Errorf("KServe InferenceService CRD is not available in the cluster: %w", err)
+	}
+	return nil
+}
+
 // Deploy creates an InferenceService and waits for it to become ready.
 func (m *Manager) Deploy(ctx context.Context, cfg ModelConfig) (*ModelStatus, error) {
 	isvc := BuildInferenceService(cfg, m.namespace)
