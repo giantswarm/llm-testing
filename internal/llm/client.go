@@ -50,7 +50,7 @@ func (s *StreamReader) Recv() (string, error) {
 
 // Close closes the stream.
 func (s *StreamReader) Close() {
-	s.stream.Close()
+	_ = s.stream.Close()
 }
 
 // OpenAIClient implements Client using the OpenAI-compatible API.

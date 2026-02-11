@@ -103,7 +103,7 @@ func loadQuestionsFromFS(fsys fs.FS, filename string) ([]Question, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open %s: %w", filename, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	reader.LazyQuotes = true
