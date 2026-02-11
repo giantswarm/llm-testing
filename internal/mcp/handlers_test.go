@@ -117,7 +117,7 @@ func TestHandleGetResultsEmptyDir(t *testing.T) {
 
 	content := result.Content[0].(mcp.TextContent)
 	// Should return empty list, not an error.
-	assert.Equal(t, "null", content.Text)
+	assert.Equal(t, "[]", content.Text)
 }
 
 func TestHandleGetResultsNonexistentDir(t *testing.T) {

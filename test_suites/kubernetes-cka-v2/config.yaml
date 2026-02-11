@@ -5,19 +5,11 @@ name: "Kubernetes CKA"
 description: "100 questions covering Kubernetes Certified Administrator (CKA) exam topics"
 version: "2"
 
+# Evaluation strategy (default: qa)
+strategy: "qa"
+
 # Questions file (relative to this config file's directory)
 questions_file: "questions.csv"
-
-# LLM API Configuration
-api:
-  # Base URL for the LLM API (OpenAI-compatible endpoint)
-  #base_url: "http://localhost:1234/v1"
-  base_url: "https://api.anthropic.com/v1"
-
-  # API key
-  # For local servers, this can be any value
-  api_key_env: "ANTHROPIC_API_KEY"
-  api_key_default: "not-needed-for-local"
 
 # Models Configuration
 # The test suite will be executed once for each model listed here
@@ -33,13 +25,3 @@ prompt:
   # System prompt that defines how the model should respond
   system_message: |
     You are a Kubernetes Certified Administrator (CKA). Answer the user's question as short as possible, in a single line, in plain text format. Avoid Markdown syntax.
-
-# Output Configuration
-output:
-  # Results will be saved to: results/<test-suite-name>/
-  # Output file naming pattern
-  # Available variables: {model}, {timestamp}
-  filename_pattern: "{model}.txt"
-
-  # Timestamp format (Python strftime format)
-  timestamp_format: "%Y%m%d%H%M%S"

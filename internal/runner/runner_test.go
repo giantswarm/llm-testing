@@ -154,28 +154,7 @@ func TestRunnerContextCancellation(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestFormatResultsFilename(t *testing.T) {
-	tests := []struct {
-		name     string
-		pattern  string
-		model    string
-		expected string
-	}{
-		{"empty pattern", "", "gpt-4", "gpt-4.txt"},
-		{"model placeholder", "{model}.txt", "gpt-4", "gpt-4.txt"},
-		{"custom pattern", "results-{model}.txt", "llama-3", "results-llama-3.txt"},
-		{"pattern without extension", "results-{model}", "gpt-4", "results-gpt-4.txt"},
-		{"pattern with different extension", "{model}.jsonl", "gpt-4", "gpt-4.jsonl"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, formatResultsFilename(tt.pattern, tt.model))
-		})
-	}
-}
-
-func TestRunnerUsesFilenamePattern(t *testing.T) {
+func TestRunnerDefaultFilename(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	client := &mockClient{responses: map[string]string{}}
@@ -183,11 +162,10 @@ func TestRunnerUsesFilenamePattern(t *testing.T) {
 	r := NewRunner(client, strategy, tmpDir)
 
 	suite := &testsuite.TestSuite{
-		Name:     "pattern-test",
+		Name:     "filename-test",
 		Strategy: "qa",
 		Models:   []testsuite.Model{{Name: "my-model", Temperature: 0}},
 		Prompt:   testsuite.Prompt{SystemMessage: "test"},
-		Output:   testsuite.Output{FilenamePattern: "results-{model}.txt"},
 		Questions: []testsuite.Question{
 			{ID: "1", Section: "S", QuestionText: "Q", ExpectedAnswer: "A"},
 		},
@@ -196,8 +174,8 @@ func TestRunnerUsesFilenamePattern(t *testing.T) {
 	run, err := r.Run(context.Background(), suite)
 	require.NoError(t, err)
 
-	// Verify the results file uses the configured pattern.
-	expectedFile := filepath.Join(tmpDir, run.ID, "results-my-model.txt")
+	// Verify the results file uses <model>.txt naming.
+	expectedFile := filepath.Join(tmpDir, run.ID, "my-model.txt")
 	assert.Equal(t, expectedFile, run.Models[0].ResultsFile)
 	assert.FileExists(t, expectedFile)
 

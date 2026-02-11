@@ -102,13 +102,19 @@ func (m *Manager) Deploy(ctx context.Context, cfg ModelConfig) (*ModelStatus, er
 	}, nil
 }
 
-// Teardown deletes an InferenceService.
+// Teardown deletes an InferenceService with graceful shutdown.
 func (m *Manager) Teardown(ctx context.Context, name string) error {
 	sanitized := sanitizeName(name)
 	slog.Info("tearing down InferenceService", "name", sanitized)
 
+	gracePeriod := int64(30)
+	propagation := metav1.DeletePropagationForeground
+
 	err := m.client.Resource(isvcGVR).Namespace(m.namespace).Delete(
-		ctx, sanitized, metav1.DeleteOptions{},
+		ctx, sanitized, metav1.DeleteOptions{
+			GracePeriodSeconds: &gracePeriod,
+			PropagationPolicy:  &propagation,
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to delete InferenceService %s: %w", sanitized, err)

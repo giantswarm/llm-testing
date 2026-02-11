@@ -32,7 +32,7 @@ func listRuns(outputDir string) (*mcp.CallToolResult, error) {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to read results directory: %v", err)), nil
 	}
 
-	var runs []map[string]interface{}
+	runs := make([]map[string]interface{}, 0)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue

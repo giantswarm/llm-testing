@@ -11,7 +11,6 @@ type TestSuite struct {
 	QuestionsFile string     `yaml:"questions_file"`
 	Models        []Model    `yaml:"models"`
 	Prompt        Prompt     `yaml:"prompt"`
-	Output        Output     `yaml:"output"`
 	Questions     []Question `yaml:"-"` // loaded separately from CSV
 }
 
@@ -25,11 +24,6 @@ type Model struct {
 type Prompt struct {
 	Role          string `yaml:"role"`
 	SystemMessage string `yaml:"system_message"`
-}
-
-// Output defines output configuration.
-type Output struct {
-	FilenamePattern string `yaml:"filename_pattern"`
 }
 
 // Question represents a single test question.
