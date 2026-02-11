@@ -23,7 +23,7 @@ type ChatRequest struct {
 	Model         string
 	SystemMessage string
 	UserMessage   string
-	Temperature   float64
+	Temperature   *float64 // nil means "use client default"
 }
 
 // ChatResponse holds the result of a chat completion.
@@ -89,7 +89,7 @@ func (c *OpenAIClient) ChatCompletion(ctx context.Context, req ChatRequest) (*Ch
 		{Role: openai.ChatMessageRoleUser, Content: req.UserMessage},
 	}
 
-	temp := float32(req.Temperature)
+	temp := float32(temperatureValue(req.Temperature))
 	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:       req.Model,
 		Messages:    messages,
@@ -117,7 +117,7 @@ func (c *OpenAIClient) ChatCompletionStream(ctx context.Context, req ChatRequest
 		{Role: openai.ChatMessageRoleUser, Content: req.UserMessage},
 	}
 
-	temp := float32(req.Temperature)
+	temp := float32(temperatureValue(req.Temperature))
 	stream, err := c.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:       req.Model,
 		Messages:    messages,
@@ -136,10 +136,18 @@ func (c *OpenAIClient) applyDefaults(req ChatRequest) ChatRequest {
 	if req.Model == "" && c.model != "" {
 		req.Model = c.model
 	}
-	if req.Temperature == 0 && c.temperature != nil {
-		req.Temperature = *c.temperature
+	if req.Temperature == nil && c.temperature != nil {
+		req.Temperature = c.temperature
 	}
 	return req
+}
+
+// temperatureValue returns the float64 temperature value, defaulting to 0 if nil.
+func temperatureValue(t *float64) float64 {
+	if t != nil {
+		return *t
+	}
+	return 0
 }
 
 // CollectStream reads all chunks from a StreamReader and returns the full content.

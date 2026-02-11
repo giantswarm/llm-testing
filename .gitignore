@@ -2,7 +2,7 @@
 results/
 
 # Go binary
-llm-testing
+/llm-testing
 dist/
 
 # IDE

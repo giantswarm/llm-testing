@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewOpenAIClientDefaults(t *testing.T) {
@@ -63,7 +64,8 @@ func TestApplyDefaultsUsesClientTemperature(t *testing.T) {
 		Model:       "test",
 		UserMessage: "hello",
 	})
-	assert.Equal(t, 0.8, req.Temperature)
+	require.NotNil(t, req.Temperature)
+	assert.Equal(t, 0.8, *req.Temperature)
 }
 
 func TestApplyDefaultsRequestTemperatureTakesPrecedence(t *testing.T) {
@@ -72,7 +74,20 @@ func TestApplyDefaultsRequestTemperatureTakesPrecedence(t *testing.T) {
 	req := client.applyDefaults(ChatRequest{
 		Model:       "test",
 		UserMessage: "hello",
-		Temperature: 0.5,
+		Temperature: Float64Ptr(0.5),
 	})
-	assert.Equal(t, 0.5, req.Temperature)
+	require.NotNil(t, req.Temperature)
+	assert.Equal(t, 0.5, *req.Temperature)
+}
+
+func TestApplyDefaultsExplicitZeroTemperaturePreserved(t *testing.T) {
+	client := NewOpenAIClient(WithTemperature(0.8))
+
+	req := client.applyDefaults(ChatRequest{
+		Model:       "test",
+		UserMessage: "hello",
+		Temperature: Float64Ptr(0.0),
+	})
+	require.NotNil(t, req.Temperature)
+	assert.Equal(t, 0.0, *req.Temperature)
 }

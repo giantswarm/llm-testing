@@ -1,5 +1,11 @@
 package llm
 
+// Float64Ptr returns a pointer to the given float64 value.
+// Useful for constructing ChatRequest with an explicit temperature.
+func Float64Ptr(v float64) *float64 {
+	return &v
+}
+
 // clientConfig holds configuration for an LLM client.
 type clientConfig struct {
 	baseURL     string

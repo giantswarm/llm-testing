@@ -152,7 +152,7 @@ func (s *Scorer) evaluate(ctx context.Context, content string) (string, error) {
 		Model:         s.config.Model,
 		SystemMessage: EvaluationPrompt,
 		UserMessage:   content,
-		Temperature:   0,
+		Temperature:   llm.Float64Ptr(0),
 	})
 	if err == nil {
 		result, streamErr := llm.CollectStream(stream)
@@ -169,7 +169,7 @@ func (s *Scorer) evaluate(ctx context.Context, content string) (string, error) {
 		Model:         s.config.Model,
 		SystemMessage: EvaluationPrompt,
 		UserMessage:   content,
-		Temperature:   0,
+		Temperature:   llm.Float64Ptr(0),
 	})
 	if err != nil {
 		return "", fmt.Errorf("evaluation failed: %w", err)

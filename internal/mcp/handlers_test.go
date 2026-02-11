@@ -209,13 +209,13 @@ func TestHandleListModelsNoManager(t *testing.T) {
 	assert.Contains(t, content.Text, "KServe manager is not configured")
 }
 
-func TestHandleDeployModelMissingRequired(t *testing.T) {
+func TestHandleDeployModelNoManagerTakesPrecedence(t *testing.T) {
 	sc := &server.ServerContext{
-		// A nil KServeManager should be caught first.
+		// A nil KServeManager should be caught before parameter validation.
 		KServeManager: nil,
 	}
 
-	// Missing model_name.
+	// Even with missing model_name, the nil-manager guard fires first.
 	request := mcp.CallToolRequest{}
 	request.Params.Arguments = map[string]interface{}{
 		"model_uri": "hf://org/model",

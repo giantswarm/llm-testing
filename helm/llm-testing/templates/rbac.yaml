@@ -1,0 +1,36 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "llm-testing.serviceAccountName" . }}
+  labels:
+    {{- include "llm-testing.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "llm-testing.fullname" . }}
+  namespace: {{ include "llm-testing.kserveNamespace" . }}
+  labels:
+    {{- include "llm-testing.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "llm-testing.fullname" . }}
+  namespace: {{ include "llm-testing.kserveNamespace" . }}
+  labels:
+    {{- include "llm-testing.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "llm-testing.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "llm-testing.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

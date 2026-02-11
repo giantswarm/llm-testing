@@ -3,6 +3,7 @@ package kserve
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -98,7 +99,8 @@ func sanitizeName(name string) string {
 		result = result[:63]
 	}
 
-	return string(result)
+	// Trim trailing dashes (invalid in DNS labels).
+	return strings.TrimRight(string(result), "-")
 }
 
 // EndpointURL returns the in-cluster URL for an InferenceService.

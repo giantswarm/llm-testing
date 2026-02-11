@@ -97,7 +97,7 @@ When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 
 			switch transport {
 			case transportStdio:
-				return runStdioServer(mcpSrv)
+				return runStdioServer(mcpSrv, shutdownCtx)
 			case transportStreamableHTTP:
 				fmt.Printf("Starting llm-testing MCP server with %s transport...\n", transport)
 				if enableOAuth {
@@ -135,7 +135,7 @@ When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 	return cmd
 }
 
-func runStdioServer(mcpSrv *mcpserver.MCPServer) error {
+func runStdioServer(mcpSrv *mcpserver.MCPServer, ctx context.Context) error {
 	serverDone := make(chan error, 1)
 	go func() {
 		defer close(serverDone)
@@ -144,11 +144,16 @@ func runStdioServer(mcpSrv *mcpserver.MCPServer) error {
 		}
 	}()
 
-	err := <-serverDone
-	if err != nil {
-		return fmt.Errorf("server stopped with error: %w", err)
+	select {
+	case <-ctx.Done():
+		fmt.Println("Shutdown signal received, stopping stdio server...")
+		return nil
+	case err := <-serverDone:
+		if err != nil {
+			return fmt.Errorf("server stopped with error: %w", err)
+		}
+		return nil
 	}
-	return nil
 }
 
 func runHTTPServer(mcpSrv *mcpserver.MCPServer, addr, endpoint string, ctx context.Context) error {

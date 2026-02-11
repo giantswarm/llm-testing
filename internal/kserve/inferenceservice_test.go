@@ -1,6 +1,7 @@
 package kserve
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,6 +82,7 @@ func TestSanitizeName(t *testing.T) {
 		{"model/name@version", "model-name-version"},
 		{"_starts_with_underscore", "m--starts-with-underscore"},
 		{"simple", "simple"},
+		{"trailing-dash-after-truncation-" + strings.Repeat("abcdefghij", 6), strings.TrimRight(("trailing-dash-after-truncation-" + strings.Repeat("abcdefghij", 6))[:63], "-")},
 	}
 
 	for _, tt := range tests {

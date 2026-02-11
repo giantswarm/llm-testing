@@ -31,7 +31,7 @@ func (s *QAStrategy) Execute(ctx context.Context, client llm.Client, model strin
 		Model:         model,
 		SystemMessage: systemPrompt,
 		UserMessage:   question.QuestionText,
-		Temperature:   temperature,
+		Temperature:   llm.Float64Ptr(temperature),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get completion for question %s: %w", question.ID, err)

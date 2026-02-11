@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-testing.fullname" . }}
+  labels:
+    {{- include "llm-testing.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "llm-testing.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "llm-testing.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "llm-testing.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+        - name: llm-testing
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - serve
+            - --transport={{ .Values.server.transport }}
+            - --http-addr={{ .Values.server.httpAddr }}
+            - --http-endpoint={{ .Values.server.httpEndpoint }}
+            - --in-cluster={{ .Values.server.inCluster }}
+            - --output-dir={{ .Values.server.outputDir }}
+            - --namespace={{ include "llm-testing.kserveNamespace" . }}
+            {{- if .Values.server.suitesDir }}
+            - --suites-dir={{ .Values.server.suitesDir }}
+            {{- end }}
+            {{- if .Values.server.debug }}
+            - --debug
+            {{- end }}
+            {{- if .Values.oauth.enabled }}
+            - --enable-oauth
+            - --oauth-base-url={{ .Values.oauth.baseURL }}
+            - --oauth-provider={{ .Values.oauth.provider }}
+            {{- end }}
+          {{- if .Values.oauth.enabled }}
+          env:
+            {{- if .Values.oauth.existingSecret }}
+            - name: DEX_ISSUER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oauth.existingSecret }}
+                  key: dex-issuer-url
+            - name: DEX_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oauth.existingSecret }}
+                  key: dex-client-id
+            - name: DEX_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oauth.existingSecret }}
+                  key: dex-client-secret
+            {{- else }}
+            - name: DEX_ISSUER_URL
+              value: {{ .Values.oauth.dexIssuerURL | quote }}
+            - name: DEX_CLIENT_ID
+              value: {{ .Values.oauth.dexClientID | quote }}
+            - name: DEX_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "llm-testing.fullname" . }}-oauth
+                  key: dex-client-secret
+            {{- end }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.persistence.enabled }}
+            - name: results
+              mountPath: {{ .Values.server.outputDir }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.persistence.enabled }}
+        - name: results
+          persistentVolumeClaim:
+            claimName: {{ include "llm-testing.fullname" . }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

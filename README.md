@@ -17,7 +17,7 @@ LLM evaluation testing framework with MCP server, KServe integration, and OAuth 
 ## Prerequisites
 
 - **KServe** installed in the cluster with a vLLM `ServingRuntime` (managed via GitOps)
-- Go 1.24+ (for building from source)
+- Go 1.25+ (for building from source)
 - Helm 3 (for Kubernetes deployment)
 
 ## Installation
@@ -62,8 +62,8 @@ llm-testing run kubernetes-cka-v2 \
 
 ```bash
 llm-testing score results/Kubernetes_CKA_20260210-120000/mistral-7b.txt \
-  --model claude-sonnet-4-5-20250929 \
-  --endpoint https://api.anthropic.com/v1 \
+  --scoring-model claude-sonnet-4-5-20250929 \
+  --scoring-endpoint https://api.anthropic.com/v1 \
   --api-key $ANTHROPIC_API_KEY \
   --repetitions 3
 ```
@@ -122,8 +122,8 @@ llm-testing/
 │   ├── scorer/           # LLM-as-judge scoring engine
 │   ├── server/           # Server context and configuration
 │   └── testsuite/        # Test suite types, loader, embedded suites
-├── helm/llm-testing/     # Helm chart
-└── test_suites/          # Test suite definitions (also embedded)
+│       └── testdata/     # Bundled test suite definitions (embedded via go:embed)
+└── helm/llm-testing/     # Helm chart
 ```
 
 ## Test Suites
@@ -132,7 +132,7 @@ Test suites are defined as a directory containing:
 - `config.yaml` -- suite metadata, models, prompt configuration
 - `questions.csv` -- questions with ID, Section, Question, ExpectedAnswer
 
-Default test suites are embedded in the binary. Additional suites can be loaded from an external directory via `--suites-dir`.
+Default test suites are embedded in the binary from `internal/testsuite/testdata/`. Additional suites can be loaded from an external directory via `--suites-dir`.
 
 ### Bundled Suites
 

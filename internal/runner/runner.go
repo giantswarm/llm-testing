@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/giantswarm/llm-testing/internal/llm"
@@ -46,7 +47,8 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 	}
 
 	timestamp := time.Now()
-	runID := fmt.Sprintf("%s_%s", suite.Name, timestamp.Format("20060102-150405"))
+	sanitizedName := strings.ReplaceAll(suite.Name, " ", "_")
+	runID := fmt.Sprintf("%s_%s", sanitizedName, timestamp.Format("20060102-150405"))
 
 	// Create output directory.
 	outputPath := filepath.Join(r.outputDir, runID)
