@@ -105,8 +105,10 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 		}
 
 		// Write results file.
+		// Sanitize model name for safe use in filenames (e.g. "org/model" -> "org_model").
 		output := r.strategy.FormatResults(results)
-		resultsFile := filepath.Join(outputPath, fmt.Sprintf("%s.txt", model.Name))
+		safeModelName := sanitizeFilename(model.Name)
+		resultsFile := filepath.Join(outputPath, fmt.Sprintf("%s.txt", safeModelName))
 		if err := os.WriteFile(resultsFile, []byte(output), 0o644); err != nil {
 			return nil, fmt.Errorf("failed to write results for model %s: %w", model.Name, err)
 		}
@@ -134,6 +136,22 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 	}
 
 	return run, nil
+}
+
+// sanitizeFilename replaces characters unsafe for filenames with underscores.
+func sanitizeFilename(name string) string {
+	replacer := strings.NewReplacer(
+		"/", "_",
+		"\\", "_",
+		":", "_",
+		"*", "_",
+		"?", "_",
+		"\"", "_",
+		"<", "_",
+		">", "_",
+		"|", "_",
+	)
+	return replacer.Replace(name)
 }
 
 func writeRunMetadata(outputPath string, run *testsuite.TestRun) error {

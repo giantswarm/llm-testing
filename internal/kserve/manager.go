@@ -183,22 +183,44 @@ func (m *Manager) statusFromObject(obj *unstructured.Unstructured) ModelStatus {
 	return status
 }
 
-// isReady checks whether an InferenceService has a Ready=True condition.
-func isReady(obj *unstructured.Unstructured) bool {
+// readyCondition describes the state of the Ready condition on an InferenceService.
+type readyCondition struct {
+	Found   bool
+	Status  string
+	Reason  string
+	Message string
+}
+
+// getReadyCondition extracts the Ready condition from an InferenceService object.
+func getReadyCondition(obj *unstructured.Unstructured) readyCondition {
 	conditions, found, _ := unstructured.NestedSlice(obj.Object, "status", "conditions")
 	if !found {
-		return false
+		return readyCondition{}
 	}
 	for _, c := range conditions {
 		cond, ok := c.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		if cond["type"] == "Ready" && cond["status"] == "True" {
-			return true
+		if cond["type"] == "Ready" {
+			reason, _ := cond["reason"].(string)
+			message, _ := cond["message"].(string)
+			status, _ := cond["status"].(string)
+			return readyCondition{
+				Found:   true,
+				Status:  status,
+				Reason:  reason,
+				Message: message,
+			}
 		}
 	}
-	return false
+	return readyCondition{}
+}
+
+// isReady checks whether an InferenceService has a Ready=True condition.
+func isReady(obj *unstructured.Unstructured) bool {
+	rc := getReadyCondition(obj)
+	return rc.Found && rc.Status == "True"
 }
 
 func (m *Manager) waitForReady(ctx context.Context, name string, timeout time.Duration) error {
@@ -228,29 +250,18 @@ func (m *Manager) waitForReady(ctx context.Context, name string, timeout time.Du
 					continue
 				}
 
-				if isReady(obj) {
+				rc := getReadyCondition(obj)
+				if rc.Found && rc.Status == "True" {
 					slog.Info("InferenceService ready", "name", name)
 					return nil
 				}
 
-				// Log pending state for debugging.
-				conditions, found, _ := unstructured.NestedSlice(obj.Object, "status", "conditions")
-				if found {
-					for _, c := range conditions {
-						cond, ok := c.(map[string]interface{})
-						if !ok {
-							continue
-						}
-						if cond["type"] == "Ready" && cond["status"] == "False" {
-							reason, _ := cond["reason"].(string)
-							message, _ := cond["message"].(string)
-							slog.Debug("InferenceService not ready yet",
-								"name", name,
-								"reason", reason,
-								"message", message,
-							)
-						}
-					}
+				if rc.Found && rc.Status == "False" {
+					slog.Debug("InferenceService not ready yet",
+						"name", name,
+						"reason", rc.Reason,
+						"message", rc.Message,
+					)
 				}
 			}
 		}

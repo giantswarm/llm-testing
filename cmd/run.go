@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/giantswarm/llm-testing/internal/llm"
 	"github.com/giantswarm/llm-testing/internal/runner"
 	"github.com/giantswarm/llm-testing/internal/testsuite"
 )
@@ -53,16 +51,7 @@ Results are written to the output directory as text files with a JSON metadata m
 			}
 
 			// Set up LLM client.
-			var opts []llm.Option
-			if endpoint != "" {
-				opts = append(opts, llm.WithBaseURL(endpoint))
-			}
-			if apiKey != "" {
-				opts = append(opts, llm.WithAPIKey(apiKey))
-			} else if envKey := os.Getenv("OPENAI_API_KEY"); envKey != "" {
-				opts = append(opts, llm.WithAPIKey(envKey))
-			}
-			client := llm.NewOpenAIClient(opts...)
+			client := newLLMClientFromFlags(endpoint, apiKey)
 
 			strategy, err := runner.GetStrategy(suite.Strategy)
 			if err != nil {

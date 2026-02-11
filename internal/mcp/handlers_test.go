@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/giantswarm/llm-testing/internal/llm"
 	"github.com/giantswarm/llm-testing/internal/server"
+	"github.com/giantswarm/llm-testing/internal/testutil"
 )
 
 func TestHandleListTestSuites(t *testing.T) {
@@ -123,7 +122,7 @@ func TestHandleScoreResultsNoClient(t *testing.T) {
 
 func TestHandleScoreResultsNeitherRunIDNorFile(t *testing.T) {
 	sc := &server.ServerContext{
-		LLMClient: &mockLLMClient{},
+		LLMClient: &testutil.MockLLMClient{},
 	}
 
 	request := mcp.CallToolRequest{}
@@ -138,7 +137,7 @@ func TestHandleScoreResultsNeitherRunIDNorFile(t *testing.T) {
 
 func TestHandleScoreResultsByRunIDNotFound(t *testing.T) {
 	sc := &server.ServerContext{
-		LLMClient: &mockLLMClient{},
+		LLMClient: &testutil.MockLLMClient{},
 		OutputDir: "/nonexistent/path",
 	}
 
@@ -162,7 +161,7 @@ func TestHandleScoreResultsByRunIDNoResultFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(runDir, "resultset.json"), []byte(`{}`), 0o644))
 
 	sc := &server.ServerContext{
-		LLMClient: &mockLLMClient{},
+		LLMClient: &testutil.MockLLMClient{},
 		OutputDir: tmpDir,
 	}
 
@@ -303,13 +302,103 @@ func TestHandleDeployModelNoManagerTakesPrecedence(t *testing.T) {
 	assert.Contains(t, content.Text, "KServe manager is not configured")
 }
 
-// mockLLMClient is a minimal mock for tests that need a non-nil LLMClient.
-type mockLLMClient struct{}
+func TestHandleRunTestSuiteSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	client := &testutil.MockLLMClient{
+		DefaultResponse: "The answer is kubectl.",
+	}
 
-func (m *mockLLMClient) ChatCompletion(_ context.Context, _ llm.ChatRequest) (*llm.ChatResponse, error) {
-	return &llm.ChatResponse{Content: "mock response"}, nil
+	sc := &server.ServerContext{
+		LLMClient: client,
+		OutputDir: tmpDir,
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"test_suite": "kubernetes-cka-v2",
+		"model":      "test-model",
+	}
+
+	result, err := handleRunTestSuite(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+
+	// Should return valid JSON summary.
+	var summary map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(content.Text), &summary))
+	assert.Contains(t, summary, "run_id")
+	assert.Contains(t, summary, "suite")
+	assert.Contains(t, summary, "duration")
+	assert.Contains(t, summary, "models")
+
+	// The LLM client should have been called (100 questions for CKA).
+	assert.Equal(t, 100, client.Calls)
 }
 
-func (m *mockLLMClient) ChatCompletionStream(_ context.Context, _ llm.ChatRequest) (*llm.StreamReader, error) {
-	return nil, fmt.Errorf("streaming not supported in mock")
+func TestHandleScoreResultsFileSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Write a fake results file.
+	resultsContent := `---
+NO. 1 - Setup
+QUESTION: What is kubectl?
+EXPECTED ANSWER: CLI tool
+ACTUAL ANSWER: kubectl is the Kubernetes CLI
+`
+	resultsFile := filepath.Join(tmpDir, "test-model.txt")
+	require.NoError(t, os.WriteFile(resultsFile, []byte(resultsContent), 0o644))
+
+	client := &testutil.MockLLMClient{
+		DefaultResponse: "72 out of 100 answers are correct.",
+	}
+
+	sc := &server.ServerContext{
+		LLMClient: client,
+		OutputDir: tmpDir,
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"results_file": resultsFile,
+		"scoring_model": "scoring-model",
+		"repetitions":   float64(2),
+	}
+
+	result, err := handleScoreResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	var scoreResult map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(content.Text), &scoreResult))
+	assert.Contains(t, scoreResult, "scores_file")
+	assert.Contains(t, scoreResult, "summary")
+	assert.Equal(t, float64(2), scoreResult["runs"])
 }
+
+func TestHandleGetResultsWithRun(t *testing.T) {
+	tmpDir := t.TempDir()
+	runDir := filepath.Join(tmpDir, "test-run")
+	require.NoError(t, os.MkdirAll(runDir, 0o755))
+
+	metadata := `{"id": "test-run", "suite": "kubernetes-cka-v2", "timestamp": "2024-01-01T00:00:00Z"}`
+	require.NoError(t, os.WriteFile(filepath.Join(runDir, "resultset.json"), []byte(metadata), 0o644))
+
+	sc := &server.ServerContext{
+		OutputDir: tmpDir,
+	}
+
+	// List all runs.
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{}
+
+	result, err := handleGetResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	var runs []map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(content.Text), &runs))
+	assert.Len(t, runs, 1)
+	assert.Equal(t, "test-run", runs[0]["id"])
+}
+

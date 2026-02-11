@@ -19,6 +19,8 @@ import (
 	"github.com/giantswarm/llm-testing/internal/server"
 )
 
+// Note: Debug logging is controlled via the global --verbose/-v flag on the root command.
+
 const (
 	transportStdio          = "stdio"
 	transportStreamableHTTP = "streamable-http"
@@ -32,7 +34,6 @@ func newServeCmd() *cobra.Command {
 		inCluster    bool
 		outputDir    string
 		suitesDir    string
-		debug        bool
 
 		// OAuth options (simplified from mcp-kubernetes).
 		enableOAuth    bool
@@ -54,12 +55,6 @@ Supports multiple transport types:
 
 When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if debug {
-				slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-					Level: slog.LevelDebug,
-				})))
-			}
-
 			namespace, _ := cmd.Flags().GetString("namespace")
 			kubeconfig, _ := cmd.Flags().GetString("kubeconfig")
 
@@ -128,7 +123,6 @@ When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 	cmd.Flags().BoolVar(&inCluster, "in-cluster", false, "Use in-cluster Kubernetes authentication")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "results", "Directory for test results")
 	cmd.Flags().StringVar(&suitesDir, "suites-dir", "", "External test suites directory (optional)")
-	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	// OAuth flags.
 	cmd.Flags().BoolVar(&enableOAuth, "enable-oauth", false, "Enable OAuth 2.1 authentication (for HTTP transport)")

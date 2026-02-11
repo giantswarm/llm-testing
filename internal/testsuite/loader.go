@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -29,7 +30,8 @@ func Load(name string, externalDir string) (*TestSuite, error) {
 	}
 
 	// Fall back to embedded test suites.
-	subFS, err := fs.Sub(embeddedSuites, filepath.Join("testdata", name))
+	// Use path.Join (not filepath.Join) because embed.FS always uses forward slashes.
+	subFS, err := fs.Sub(embeddedSuites, path.Join("testdata", name))
 	if err != nil {
 		return nil, fmt.Errorf("test suite %q not found: %w", name, err)
 	}
@@ -125,14 +127,25 @@ func loadQuestionsFromFS(fsys fs.FS, filename string) ([]Question, error) {
 		}
 	}
 
+	// Determine the minimum number of columns required by checking the max column index.
+	minCols := 0
+	for _, idx := range colIndex {
+		if idx >= minCols {
+			minCols = idx + 1
+		}
+	}
+
 	var questions []Question
-	for {
+	for lineNum := 2; ; lineNum++ { // lineNum starts at 2 (1-indexed, after header).
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read CSV row: %w", err)
+			return nil, fmt.Errorf("failed to read CSV row %d: %w", lineNum, err)
+		}
+		if len(record) < minCols {
+			return nil, fmt.Errorf("CSV row %d has %d columns, expected at least %d", lineNum, len(record), minCols)
 		}
 
 		questions = append(questions, Question{

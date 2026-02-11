@@ -2,7 +2,7 @@
 
 .PHONY: build
 build: ## Build the binary.
-	go build -trimpath -ldflags "-s -w -X main.version=dev" -o llm-testing .
+	go build -trimpath -ldflags "-s -w -X main.version=dev -X main.commit=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o llm-testing .
 
 .PHONY: test
 test: ## Run tests with race detection.

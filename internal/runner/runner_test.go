@@ -10,34 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/giantswarm/llm-testing/internal/llm"
+	"github.com/giantswarm/llm-testing/internal/testutil"
 	"github.com/giantswarm/llm-testing/internal/testsuite"
 )
-
-// mockClient is a test double for llm.Client.
-type mockClient struct {
-	responses map[string]string
-	calls     int
-}
-
-func (m *mockClient) ChatCompletion(_ context.Context, req llm.ChatRequest) (*llm.ChatResponse, error) {
-	m.calls++
-	resp, ok := m.responses[req.UserMessage]
-	if !ok {
-		resp = "default mock response"
-	}
-	return &llm.ChatResponse{Content: resp}, nil
-}
-
-func (m *mockClient) ChatCompletionStream(_ context.Context, _ llm.ChatRequest) (*llm.StreamReader, error) {
-	return nil, assert.AnError
-}
 
 func TestRunnerExecutesSuite(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	client := &mockClient{
-		responses: map[string]string{
+	client := &testutil.MockLLMClient{
+		Responses: map[string]string{
 			"What is kubectl?": "kubectl is the Kubernetes CLI",
 		},
 	}
@@ -65,7 +46,7 @@ func TestRunnerExecutesSuite(t *testing.T) {
 	assert.Equal(t, "test-model", run.Models[0].ModelName)
 	assert.Len(t, run.Models[0].Results, 1)
 	assert.Equal(t, "kubectl is the Kubernetes CLI", run.Models[0].Results[0].Answer)
-	assert.Equal(t, 1, client.calls)
+	assert.Equal(t, 1, client.Calls)
 
 	// Verify files were written.
 	assert.FileExists(t, run.Models[0].ResultsFile)
@@ -77,7 +58,7 @@ func TestRunnerExecutesSuite(t *testing.T) {
 func TestRunnerMultipleModels(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	client := &mockClient{responses: map[string]string{}}
+	client := &testutil.MockLLMClient{}
 	strategy, _ := GetStrategy("qa")
 	r := NewRunner(client, strategy, tmpDir)
 
@@ -97,13 +78,13 @@ func TestRunnerMultipleModels(t *testing.T) {
 	run, err := r.Run(context.Background(), suite)
 	require.NoError(t, err)
 	assert.Len(t, run.Models, 2)
-	assert.Equal(t, 2, client.calls) // one per model
+	assert.Equal(t, 2, client.Calls) // one per model
 }
 
 func TestRunnerProgressCallback(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	client := &mockClient{responses: map[string]string{}}
+	client := &testutil.MockLLMClient{}
 	strategy, _ := GetStrategy("qa")
 	r := NewRunner(client, strategy, tmpDir)
 
@@ -132,7 +113,7 @@ func TestRunnerContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a client that respects context cancellation.
-	client := &mockClient{responses: map[string]string{}}
+	client := &testutil.MockLLMClient{}
 	strategy, _ := GetStrategy("qa")
 	r := NewRunner(client, strategy, tmpDir)
 
@@ -157,7 +138,7 @@ func TestRunnerContextCancellation(t *testing.T) {
 func TestRunnerDefaultFilename(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	client := &mockClient{responses: map[string]string{}}
+	client := &testutil.MockLLMClient{}
 	strategy, _ := GetStrategy("qa")
 	r := NewRunner(client, strategy, tmpDir)
 

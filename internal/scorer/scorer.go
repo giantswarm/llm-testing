@@ -20,8 +20,6 @@ import (
 type Config struct {
 	Model       string
 	Repetitions int
-	Endpoint    string
-	APIKey      string
 }
 
 // RunScore represents the parsed result of a single scoring run.
@@ -42,11 +40,10 @@ type ScoreOutput struct {
 
 // ScoreMetadata holds information about the scoring run.
 type ScoreMetadata struct {
-	Timestamp   string `json:"timestamp"`
-	ResultsFile string `json:"results_file"`
-	ScoringAPI  string `json:"scoring_api"`
+	Timestamp    string `json:"timestamp"`
+	ResultsFile  string `json:"results_file"`
 	ScoringModel string `json:"scoring_model"`
-	Repetitions int    `json:"repetitions"`
+	Repetitions  int    `json:"repetitions"`
 }
 
 // Summary holds aggregate statistics from multiple scoring runs.
@@ -89,7 +86,6 @@ func (s *Scorer) Score(ctx context.Context, content string, resultsFile string) 
 		Metadata: ScoreMetadata{
 			Timestamp:    time.Now().Format(time.RFC3339),
 			ResultsFile:  resultsFile,
-			ScoringAPI:   s.config.Endpoint,
 			ScoringModel: s.config.Model,
 			Repetitions:  s.config.Repetitions,
 		},

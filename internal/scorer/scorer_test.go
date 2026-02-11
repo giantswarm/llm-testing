@@ -2,12 +2,14 @@ package scorer
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/giantswarm/llm-testing/internal/llm"
+	"github.com/giantswarm/llm-testing/internal/testutil"
 )
 
 func TestParseScore(t *testing.T) {
@@ -132,22 +134,9 @@ func TestCalculateStatisticsVariance(t *testing.T) {
 	assert.InDelta(t, 66.67, *stats.Variance, 0.1)
 }
 
-// mockScorerClient returns a consistent scoring response.
-type mockScorerClient struct {
-	response string
-}
-
-func (m *mockScorerClient) ChatCompletion(_ context.Context, _ llm.ChatRequest) (*llm.ChatResponse, error) {
-	return &llm.ChatResponse{Content: m.response}, nil
-}
-
-func (m *mockScorerClient) ChatCompletionStream(_ context.Context, _ llm.ChatRequest) (*llm.StreamReader, error) {
-	return nil, assert.AnError
-}
-
 func TestScorerScore(t *testing.T) {
-	client := &mockScorerClient{
-		response: "After evaluation, 72 out of 100 answers are correct.",
+	client := &testutil.MockLLMClient{
+		DefaultResponse: "After evaluation, 72 out of 100 answers are correct.",
 	}
 
 	s := NewScorer(client, Config{
@@ -181,13 +170,101 @@ func TestScorerScore(t *testing.T) {
 }
 
 func TestScorerDefaultRepetitions(t *testing.T) {
-	s := NewScorer(&mockScorerClient{response: "50 out of 100"}, Config{})
+	s := NewScorer(&testutil.MockLLMClient{DefaultResponse: "50 out of 100"}, Config{})
 	assert.Equal(t, 3, s.config.Repetitions)
 }
 
+func TestScoreFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	resultsFile := tmpDir + "/results.txt"
+	content := `---
+NO. 1 - Setup
+QUESTION: What is kubectl?
+EXPECTED ANSWER: CLI tool
+ACTUAL ANSWER: kubectl is the Kubernetes CLI tool
+`
+	require.NoError(t, os.WriteFile(resultsFile, []byte(content), 0o644))
+
+	client := &testutil.MockLLMClient{
+		DefaultResponse: "85 out of 100 answers are correct.",
+	}
+	s := NewScorer(client, Config{Model: "scorer", Repetitions: 2})
+
+	output, err := s.ScoreFile(context.Background(), resultsFile)
+	require.NoError(t, err)
+
+	assert.Equal(t, resultsFile, output.Metadata.ResultsFile)
+	assert.Len(t, output.Runs, 2)
+	for _, run := range output.Runs {
+		require.NotNil(t, run.Correct)
+		assert.Equal(t, 85, *run.Correct)
+	}
+}
+
+func TestScoreFileNotFound(t *testing.T) {
+	client := &testutil.MockLLMClient{}
+	s := NewScorer(client, Config{Model: "m", Repetitions: 1})
+
+	_, err := s.ScoreFile(context.Background(), "/nonexistent/file.txt")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read results file")
+}
+
+func TestWriteScoreFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	resultsFile := tmpDir + "/model.txt"
+	// Create an empty results file so the path exists.
+	require.NoError(t, os.WriteFile(resultsFile, []byte("test"), 0o644))
+
+	c1, t1 := 80, 100
+	p1 := 80.0
+	meanC, meanP := 80.0, 80.0
+	minC, maxC := 80, 80
+	variance := 0.0
+
+	output := &ScoreOutput{
+		Metadata: ScoreMetadata{
+			Timestamp:    "2024-01-01T00:00:00Z",
+			ResultsFile:  resultsFile,
+			ScoringModel: "scorer",
+			Repetitions:  1,
+		},
+		Runs: []RunScore{
+			{Correct: &c1, Total: &t1, Percent: &p1, RawOutput: "80 out of 100"},
+		},
+		Summary: Summary{
+			MeanCorrect:   &meanC,
+			MeanPercent:   &meanP,
+			MinCorrect:    &minC,
+			MaxCorrect:    &maxC,
+			Variance:      &variance,
+			AllRunsParsed: true,
+		},
+	}
+
+	scoresFile, err := WriteScoreFile(output, resultsFile)
+	require.NoError(t, err)
+
+	// Verify file was created.
+	assert.FileExists(t, scoresFile)
+	expectedPath := tmpDir + "/model_scores.json"
+	assert.Equal(t, expectedPath, scoresFile)
+
+	// Verify JSON content is valid.
+	data, err := os.ReadFile(scoresFile)
+	require.NoError(t, err)
+
+	var parsed ScoreOutput
+	require.NoError(t, json.Unmarshal(data, &parsed))
+	assert.Equal(t, "scorer", parsed.Metadata.ScoringModel)
+	assert.Len(t, parsed.Runs, 1)
+	require.NotNil(t, parsed.Summary.MeanCorrect)
+	assert.InDelta(t, 80.0, *parsed.Summary.MeanCorrect, 0.01)
+}
+
 func TestScorerHandlesParseFailure(t *testing.T) {
-	client := &mockScorerClient{
-		response: "The candidate performed adequately.", // no parseable score
+	client := &testutil.MockLLMClient{
+		DefaultResponse: "The candidate performed adequately.", // no parseable score
 	}
 
 	s := NewScorer(client, Config{Repetitions: 2})

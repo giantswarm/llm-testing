@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/giantswarm/llm-testing/internal/llm"
 	"github.com/giantswarm/llm-testing/internal/scorer"
 )
 
@@ -32,21 +31,11 @@ JSON scores.`,
 				return fmt.Errorf("results file not found: %s", resultsFile)
 			}
 
-			var opts []llm.Option
-			if scoringEndpoint != "" {
-				opts = append(opts, llm.WithBaseURL(scoringEndpoint))
-			}
-			if scoringAPIKey != "" {
-				opts = append(opts, llm.WithAPIKey(scoringAPIKey))
-			} else if envKey := os.Getenv("OPENAI_API_KEY"); envKey != "" {
-				opts = append(opts, llm.WithAPIKey(envKey))
-			}
-			client := llm.NewOpenAIClient(opts...)
+			client := newLLMClientFromFlags(scoringEndpoint, scoringAPIKey)
 
 			s := scorer.NewScorer(client, scorer.Config{
 				Model:       scoringModel,
 				Repetitions: repetitions,
-				Endpoint:    scoringEndpoint,
 			})
 
 			fmt.Printf("Scoring: %s\n", resultsFile)

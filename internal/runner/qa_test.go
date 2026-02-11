@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/giantswarm/llm-testing/internal/llm"
+	"github.com/giantswarm/llm-testing/internal/testutil"
 	"github.com/giantswarm/llm-testing/internal/testsuite"
 )
 
@@ -55,20 +55,13 @@ func TestQAStrategyFormatResults(t *testing.T) {
 	assert.Contains(t, output, "ACTUAL ANSWER: kubectl is the Kubernetes command-line tool")
 }
 
-// qaTestClient is a mock LLM client for QA strategy tests.
-type qaTestClient struct{}
-
-func (c *qaTestClient) ChatCompletion(_ context.Context, req llm.ChatRequest) (*llm.ChatResponse, error) {
-	return &llm.ChatResponse{Content: "mock answer for: " + req.UserMessage}, nil
-}
-
-func (c *qaTestClient) ChatCompletionStream(_ context.Context, _ llm.ChatRequest) (*llm.StreamReader, error) {
-	return nil, assert.AnError
-}
-
 func TestQAStrategyExecute(t *testing.T) {
 	s := &QAStrategy{}
-	client := &qaTestClient{}
+	client := &testutil.MockLLMClient{
+		Responses: map[string]string{
+			"What is a Pod?": "mock answer for: What is a Pod?",
+		},
+	}
 
 	question := testsuite.Question{
 		ID:             "42",
@@ -86,12 +79,7 @@ func TestQAStrategyExecute(t *testing.T) {
 
 func TestQAStrategyExecutePassesSystemPrompt(t *testing.T) {
 	s := &QAStrategy{}
-
-	// Client that captures the system message.
-	var capturedSystem string
-	client := &captureClient{onCompletion: func(req llm.ChatRequest) {
-		capturedSystem = req.SystemMessage
-	}}
+	client := &testutil.MockLLMClient{}
 
 	question := testsuite.Question{
 		ID:           "1",
@@ -100,21 +88,5 @@ func TestQAStrategyExecutePassesSystemPrompt(t *testing.T) {
 
 	_, err := s.Execute(context.Background(), client, "model", question, "custom system prompt", 0.5)
 	require.NoError(t, err)
-	assert.Equal(t, "custom system prompt", capturedSystem)
-}
-
-// captureClient captures request parameters for verification.
-type captureClient struct {
-	onCompletion func(llm.ChatRequest)
-}
-
-func (c *captureClient) ChatCompletion(_ context.Context, req llm.ChatRequest) (*llm.ChatResponse, error) {
-	if c.onCompletion != nil {
-		c.onCompletion(req)
-	}
-	return &llm.ChatResponse{Content: "ok"}, nil
-}
-
-func (c *captureClient) ChatCompletionStream(_ context.Context, _ llm.ChatRequest) (*llm.StreamReader, error) {
-	return nil, assert.AnError
+	assert.Equal(t, "custom system prompt", client.LastRequest.SystemMessage)
 }

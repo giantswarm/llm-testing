@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -16,6 +18,14 @@ via an MCP server with OAuth 2.1 authentication.
 
 When run without subcommands, it starts the MCP server (equivalent to 'llm-testing serve').`,
 	SilenceUsage: true,
+	PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		if verbose {
+			slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+				Level: slog.LevelDebug,
+			})))
+		}
+	},
 }
 
 // serveCmd is stored so the root command can delegate to it by default.
@@ -42,8 +52,17 @@ func Execute() {
 	rootCmd.SetVersionTemplate(`{{printf "llm-testing version %s\n" .Version}}`)
 
 	// Default to the serve command when invoked without arguments.
-	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		return serveCmd.RunE(serveCmd, args)
+	// We use Run (not RunE) to print the help text directing the user to use
+	// an explicit subcommand, since the root command cannot parse serve-specific
+	// flags (like --transport, --http-addr).
+	rootCmd.Run = func(cmd *cobra.Command, args []string) {
+		fmt.Fprintln(os.Stderr, "No subcommand specified. Defaulting to 'serve' (stdio transport).")
+		fmt.Fprintln(os.Stderr, "For HTTP transport or OAuth, use: llm-testing serve --transport streamable-http")
+		fmt.Fprintln(os.Stderr)
+		if err := serveCmd.RunE(serveCmd, args); err != nil {
+			slog.Error("serve failed", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	err := rootCmd.Execute()

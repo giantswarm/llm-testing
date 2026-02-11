@@ -30,7 +30,10 @@ type OAuthConfig struct {
 	// BaseURL is the server's public base URL (e.g. https://llm-testing.example.com).
 	BaseURL string
 
-	// Provider is the OAuth provider name (currently only "dex").
+	// Provider is the OAuth provider name.
+	// Currently only "dex" is supported. This field is reserved for future
+	// provider implementations (e.g. "okta", "auth0") and is recorded in
+	// server metadata for operational visibility.
 	Provider string
 
 	// DexIssuerURL is the Dex OIDC issuer URL.
@@ -54,6 +57,10 @@ type OAuthHTTPServer struct {
 
 // NewOAuthHTTPServer creates a new OAuth-enabled HTTP server for MCP.
 func NewOAuthHTTPServer(mcpSrv *mcpserver.MCPServer, mcpEndpoint string, cfg OAuthConfig) (*OAuthHTTPServer, error) {
+	if cfg.Provider != "" && cfg.Provider != OAuthProviderDex {
+		return nil, fmt.Errorf("unsupported OAuth provider %q (supported: %s)", cfg.Provider, OAuthProviderDex)
+	}
+
 	if err := validateHTTPSRequirement(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("OAuth base URL validation failed: %w", err)
 	}
