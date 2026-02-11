@@ -55,6 +55,7 @@ type Summary struct {
 	MeanPercent  *float64 `json:"mean_percentage"`
 	MinCorrect   *int     `json:"min_correct"`
 	MaxCorrect   *int     `json:"max_correct"`
+	Variance     *float64 `json:"variance"`
 	AllRunsParsed bool    `json:"all_runs_parsed"`
 }
 
@@ -222,12 +223,14 @@ func calculateStatistics(runs []RunScore) Summary {
 	meanPercent := meanFloat(percentValues)
 	minC := slices.Min(correctValues)
 	maxC := slices.Max(correctValues)
+	variance := varianceFloat(correctValues, meanCorrect)
 
 	return Summary{
 		MeanCorrect:   &meanCorrect,
 		MeanPercent:   &meanPercent,
 		MinCorrect:    &minC,
 		MaxCorrect:    &maxC,
+		Variance:      &variance,
 		AllRunsParsed: len(correctValues) == len(runs),
 	}
 }
@@ -246,4 +249,17 @@ func meanFloat(vals []float64) float64 {
 		sum += v
 	}
 	return math.Round(sum/float64(len(vals))*100) / 100
+}
+
+// varianceFloat calculates the population variance of integer values given a precomputed mean.
+func varianceFloat(vals []int, mean float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	sumSquaredDiff := 0.0
+	for _, v := range vals {
+		diff := float64(v) - mean
+		sumSquaredDiff += diff * diff
+	}
+	return math.Round(sumSquaredDiff/float64(len(vals))*100) / 100
 }

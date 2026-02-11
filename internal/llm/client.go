@@ -55,7 +55,9 @@ func (s *StreamReader) Close() {
 
 // OpenAIClient implements Client using the OpenAI-compatible API.
 type OpenAIClient struct {
-	client *openai.Client
+	client      *openai.Client
+	model       string
+	temperature *float64
 }
 
 // NewOpenAIClient creates a new OpenAI-compatible client.
@@ -72,12 +74,16 @@ func NewOpenAIClient(opts ...Option) *OpenAIClient {
 	config.BaseURL = cfg.baseURL
 
 	return &OpenAIClient{
-		client: openai.NewClientWithConfig(config),
+		client:      openai.NewClientWithConfig(config),
+		model:       cfg.model,
+		temperature: cfg.temperature,
 	}
 }
 
 // ChatCompletion sends a non-streaming chat completion request.
 func (c *OpenAIClient) ChatCompletion(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	req = c.applyDefaults(req)
+
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: req.SystemMessage},
 		{Role: openai.ChatMessageRoleUser, Content: req.UserMessage},
@@ -104,6 +110,8 @@ func (c *OpenAIClient) ChatCompletion(ctx context.Context, req ChatRequest) (*Ch
 
 // ChatCompletionStream sends a streaming chat completion request.
 func (c *OpenAIClient) ChatCompletionStream(ctx context.Context, req ChatRequest) (*StreamReader, error) {
+	req = c.applyDefaults(req)
+
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: req.SystemMessage},
 		{Role: openai.ChatMessageRoleUser, Content: req.UserMessage},
@@ -120,6 +128,18 @@ func (c *OpenAIClient) ChatCompletionStream(ctx context.Context, req ChatRequest
 	}
 
 	return &StreamReader{stream: stream}, nil
+}
+
+// applyDefaults applies client-level defaults to a request where
+// the request does not specify its own values.
+func (c *OpenAIClient) applyDefaults(req ChatRequest) ChatRequest {
+	if req.Model == "" && c.model != "" {
+		req.Model = c.model
+	}
+	if req.Temperature == 0 && c.temperature != nil {
+		req.Temperature = *c.temperature
+	}
+	return req
 }
 
 // CollectStream reads all chunks from a StreamReader and returns the full content.

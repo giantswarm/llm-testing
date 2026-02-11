@@ -21,9 +21,20 @@ When run without subcommands, it starts the MCP server (equivalent to 'llm-testi
 // serveCmd is stored so the root command can delegate to it by default.
 var serveCmd *cobra.Command
 
+var (
+	buildCommit = "unknown"
+	buildDate   = "unknown"
+)
+
 // SetVersion sets the version for the root command.
 func SetVersion(v string) {
 	rootCmd.Version = v
+}
+
+// SetBuildInfo sets the commit and build date for the version command.
+func SetBuildInfo(commit, date string) {
+	buildCommit = commit
+	buildDate = date
 }
 
 // Execute is the main entry point for the CLI application.

@@ -235,13 +235,52 @@ func runOAuthHTTPServer(mcpSrv *mcpserver.MCPServer, addr, endpoint string, ctx 
 		return fmt.Errorf("dex client secret is required (--dex-client-secret or DEX_CLIENT_SECRET)")
 	}
 
-	// TODO: Integrate github.com/giantswarm/mcp-oauth for full OAuth 2.1 server.
-	// For now, start a basic HTTP server. The OAuth integration follows the
-	// mcp-kubernetes pattern in internal/server/oauth_http.go.
+	oauthSrv, err := server.NewOAuthHTTPServer(mcpSrv, endpoint, server.OAuthConfig{
+		BaseURL:         cfg.baseURL,
+		Provider:        cfg.provider,
+		DexIssuerURL:    cfg.dexIssuerURL,
+		DexClientID:     cfg.dexClientID,
+		DexClientSecret: cfg.dexClientSecret,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create OAuth HTTP server: %w", err)
+	}
+
 	fmt.Printf("OAuth-enabled HTTP server starting on %s\n", addr)
 	fmt.Printf("  Base URL: %s\n", cfg.baseURL)
 	fmt.Printf("  Provider: %s\n", cfg.provider)
-	fmt.Printf("  Note: Full OAuth 2.1 integration requires github.com/giantswarm/mcp-oauth\n")
+	fmt.Printf("  MCP endpoint: %s (requires OAuth Bearer token)\n", endpoint)
+	fmt.Printf("  Health: /healthz\n")
+	fmt.Printf("  OAuth endpoints:\n")
+	fmt.Printf("    - Authorization Server Metadata: /.well-known/oauth-authorization-server\n")
+	fmt.Printf("    - Protected Resource Metadata: /.well-known/oauth-protected-resource\n")
+	fmt.Printf("    - Client Registration: /oauth/register\n")
+	fmt.Printf("    - Authorization: /oauth/authorize\n")
+	fmt.Printf("    - Token: /oauth/token\n")
+	fmt.Printf("    - Callback: /oauth/callback\n")
 
-	return runHTTPServer(mcpSrv, addr, endpoint, ctx)
+	serverDone := make(chan error, 1)
+	go func() {
+		defer close(serverDone)
+		if err := oauthSrv.Start(addr); err != nil && err != http.ErrServerClosed {
+			serverDone <- err
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		fmt.Println("Shutdown signal received, stopping OAuth HTTP server...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := oauthSrv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("error shutting down OAuth HTTP server: %w", err)
+		}
+	case err := <-serverDone:
+		if err != nil {
+			return fmt.Errorf("OAuth HTTP server error: %w", err)
+		}
+	}
+
+	fmt.Println("OAuth HTTP server stopped")
+	return nil
 }

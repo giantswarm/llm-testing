@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -20,6 +22,7 @@ func newRunCmd() *cobra.Command {
 		temperature float64
 		outputDir   string
 		suitesDir   string
+		timeout     time.Duration
 	)
 
 	cmd := &cobra.Command{
@@ -30,6 +33,13 @@ func newRunCmd() *cobra.Command {
 Results are written to the output directory as text files with a JSON metadata manifest.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			if timeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, timeout)
+				defer cancel()
+			}
+
 			suiteName := args[0]
 
 			suite, err := testsuite.Load(suiteName, suitesDir)
@@ -72,7 +82,7 @@ Results are written to the output directory as text files with a JSON metadata m
 			}
 			fmt.Println()
 
-			run, err := r.Run(cmd.Context(), suite)
+			run, err := r.Run(ctx, suite)
 			if err != nil {
 				return err
 			}
@@ -96,6 +106,7 @@ Results are written to the output directory as text files with a JSON metadata m
 	cmd.Flags().Float64Var(&temperature, "temperature", 0.0, "Temperature for generation")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "results", "Directory for test results")
 	cmd.Flags().StringVar(&suitesDir, "suites-dir", "", "External test suites directory")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "Overall timeout for the test run (e.g. 30m, 1h). 0 means no timeout")
 
 	return cmd
 }

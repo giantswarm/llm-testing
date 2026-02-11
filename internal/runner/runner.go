@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/giantswarm/llm-testing/internal/llm"
@@ -92,7 +93,7 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 
 		// Write results file.
 		output := r.strategy.FormatResults(results)
-		resultsFile := filepath.Join(outputPath, fmt.Sprintf("%s.txt", model.Name))
+		resultsFile := filepath.Join(outputPath, formatResultsFilename(suite.Output.FilenamePattern, model.Name))
 		if err := os.WriteFile(resultsFile, []byte(output), 0o644); err != nil {
 			return nil, fmt.Errorf("failed to write results for model %s: %w", model.Name, err)
 		}
@@ -120,6 +121,21 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 	}
 
 	return run, nil
+}
+
+// formatResultsFilename returns the output filename for a model's results.
+// It uses the configured FilenamePattern if set (replacing {model} with the model name),
+// otherwise falls back to "<model>.txt".
+func formatResultsFilename(pattern, modelName string) string {
+	if pattern == "" {
+		return fmt.Sprintf("%s.txt", modelName)
+	}
+	name := strings.ReplaceAll(pattern, "{model}", modelName)
+	// Ensure the file has an extension.
+	if !strings.Contains(name, ".") {
+		name += ".txt"
+	}
+	return name
 }
 
 func writeRunMetadata(outputPath string, run *testsuite.TestRun) error {

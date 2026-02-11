@@ -4,10 +4,15 @@ import (
 	"github.com/giantswarm/llm-testing/cmd"
 )
 
-// version will be set by goreleaser during build.
-var version = "dev"
+// These will be set by goreleaser during build via ldflags.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
 
 func main() {
 	cmd.SetVersion(version)
+	cmd.SetBuildInfo(commit, date)
 	cmd.Execute()
 }

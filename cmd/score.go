@@ -81,8 +81,8 @@ JSON scores.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&scoringModel, "model", "", "Scoring model name")
-	cmd.Flags().StringVar(&scoringEndpoint, "endpoint", "", "Scoring LLM endpoint URL")
+	cmd.Flags().StringVar(&scoringModel, "scoring-model", "", "Scoring model name")
+	cmd.Flags().StringVar(&scoringEndpoint, "scoring-endpoint", "", "Scoring LLM endpoint URL")
 	cmd.Flags().StringVar(&scoringAPIKey, "api-key", "", "Scoring API key (or set OPENAI_API_KEY)")
 	cmd.Flags().IntVar(&repetitions, "repetitions", 3, "Number of scoring repetitions")
 
