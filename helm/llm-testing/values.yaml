@@ -17,6 +17,17 @@ server:
   suitesDir: ""
   debug: false
 
+# Scoring configuration.
+scoring:
+  # Default model used for LLM-as-judge scoring.
+  model: claude-sonnet-4-5-20250514
+  # Optional default OpenAI-compatible endpoint for scoring.
+  endpoint: ""
+  # Optional API key for scoring endpoint (prefer existingSecret in production).
+  apiKey: ""
+  # Existing secret containing key `api-key` used as OPENAI_API_KEY.
+  existingSecret: ""
+
 # OAuth 2.1 configuration.
 oauth:
   enabled: false

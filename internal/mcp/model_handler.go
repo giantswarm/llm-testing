@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -26,6 +27,10 @@ func registerModelTools(s *mcpserver.MCPServer, sc *server.ServerContext) error 
 		),
 		mcp.WithNumber("gpu_count",
 			mcp.Description("Number of GPUs to request (default: 1)"),
+		),
+		mcp.WithArray("runtime_args",
+			mcp.Description("Optional runtime arguments for the serving runtime (e.g. ['--max-model-len=4096'])"),
+			mcp.WithStringItems(),
 		),
 	)
 	s.AddTool(deployTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -76,6 +81,21 @@ func handleDeployModel(ctx context.Context, request mcp.CallToolRequest, sc *ser
 
 	if gpuCount, ok := args["gpu_count"].(float64); ok && gpuCount > 0 {
 		cfg.GPUCount = int(gpuCount)
+	}
+	if rawArgs, ok := args["runtime_args"].([]interface{}); ok && len(rawArgs) > 0 {
+		runtimeArgs := make([]string, 0, len(rawArgs))
+		for _, arg := range rawArgs {
+			argStr, ok := arg.(string)
+			if !ok {
+				return mcp.NewToolResultError("runtime_args must be an array of strings"), nil
+			}
+			argStr = strings.TrimSpace(argStr)
+			if argStr == "" {
+				return mcp.NewToolResultError("runtime_args entries must be non-empty strings"), nil
+			}
+			runtimeArgs = append(runtimeArgs, argStr)
+		}
+		cfg.RuntimeArgs = runtimeArgs
 	}
 
 	status, err := sc.KServeManager.Deploy(ctx, cfg)

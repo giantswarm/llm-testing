@@ -18,7 +18,11 @@ func handleGetResults(_ context.Context, request mcp.CallToolRequest, sc *server
 	runID, _ := args["run_id"].(string)
 
 	if runID != "" {
-		return getSpecificRun(sc.OutputDir, runID)
+		runPath, err := resolveRunPath(sc.OutputDir, runID)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid run_id: %v", err)), nil
+		}
+		return getSpecificRun(runID, runPath)
 	}
 	return listRuns(sc.OutputDir)
 }
@@ -68,8 +72,7 @@ func listRuns(outputDir string) (*mcp.CallToolResult, error) {
 	return mcp.NewToolResultText(string(data)), nil
 }
 
-func getSpecificRun(outputDir, runID string) (*mcp.CallToolResult, error) {
-	runPath := filepath.Join(outputDir, runID)
+func getSpecificRun(runID, runPath string) (*mcp.CallToolResult, error) {
 	metadataPath := filepath.Join(runPath, "resultset.json")
 
 	data, err := os.ReadFile(metadataPath)

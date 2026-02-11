@@ -23,25 +23,35 @@ func registerTestSuiteTools(s *mcpserver.MCPServer, sc *server.ServerContext) er
 
 	// run_test_suite
 	runTool := mcp.NewTool("run_test_suite",
-		mcp.WithDescription("Execute a test suite against specified models. If models are deployed via KServe, the test connects to their endpoints automatically. Use 'models' for multi-model configs or 'model' for a single model override."),
+		mcp.WithDescription(`Execute a test suite against one or more models. Models are specified at runtime -- they are NOT part of the test suite configuration.
+
+When models have a 'model_uri', they can be automatically deployed via KServe InferenceService before testing and torn down afterwards. Models are tested sequentially to respect GPU memory constraints.
+
+Use 'models' for multi-model configs (JSON array) or 'model' for a single model.`),
 		mcp.WithString("test_suite",
 			mcp.Required(),
 			mcp.Description("Name of the test suite to run (e.g. 'kubernetes-cka-v2')"),
 		),
 		mcp.WithString("model",
-			mcp.Description("Single model name to test (overrides suite config). For multiple models, use the 'models' parameter instead."),
+			mcp.Description("Single model name to test. For multiple models, use the 'models' parameter instead."),
 		),
 		mcp.WithString("models",
-			mcp.Description("JSON array of model configs, e.g. [{\"name\":\"gpt-4\",\"temperature\":0.0,\"model_uri\":\"hf://org/model\",\"gpu_count\":1}]. When 'deploy' is true, models with 'model_uri' are auto-deployed via KServe."),
+			mcp.Description(`JSON array of model configs. Each model can include:
+- "name" (required): model identifier
+- "temperature": generation temperature (default: 0.0)
+- "model_uri": KServe storage URI for auto-deploy (e.g. "hf://org/model")
+- "gpu_count": GPUs to request when deploying (default: 1)
+
+Example: [{"name":"mistral-7b","model_uri":"hf://mistralai/Mistral-7B-Instruct-v0.3","gpu_count":1}]`),
 		),
 		mcp.WithString("endpoint",
-			mcp.Description("LLM endpoint URL (overrides auto-discovery from KServe)"),
+			mcp.Description("LLM endpoint URL (overrides KServe auto-discovery). Use when models are served externally."),
 		),
 		mcp.WithNumber("temperature",
-			mcp.Description("Temperature for generation when using single 'model' param (default: from suite config)"),
+			mcp.Description("Temperature for generation when using single 'model' param (default: 0.0)"),
 		),
 		mcp.WithBoolean("deploy",
-			mcp.Description("Auto-deploy models via KServe InferenceService before running tests (requires 'models' with 'model_uri')"),
+			mcp.Description("Whether to auto-deploy models with model_uri via KServe (default: true)"),
 		),
 	)
 	s.AddTool(runTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -50,7 +60,7 @@ func registerTestSuiteTools(s *mcpserver.MCPServer, sc *server.ServerContext) er
 
 	// score_results
 	scoreTool := mcp.NewTool("score_results",
-		mcp.WithDescription("Score a completed test run using an LLM as judge. Provide either 'run_id' to score all results in a run, or 'results_file' to score a specific file."),
+		mcp.WithDescription("Score a completed test run using an LLM as judge. Provide exactly one of 'run_id' (all result files in a run) or 'results_file' (one specific file)."),
 		mcp.WithString("run_id",
 			mcp.Description("Run ID to score (scores all result files in the run directory)"),
 		),
@@ -58,7 +68,7 @@ func registerTestSuiteTools(s *mcpserver.MCPServer, sc *server.ServerContext) er
 			mcp.Description("Path to a specific results file to score"),
 		),
 		mcp.WithString("scoring_model",
-			mcp.Description("Model to use for scoring (default: from config)"),
+			mcp.Description("Model to use for scoring (default: claude-sonnet-4-5-20250514)"),
 		),
 		mcp.WithNumber("repetitions",
 			mcp.Description("Number of scoring repetitions for confidence (default: 3)"),

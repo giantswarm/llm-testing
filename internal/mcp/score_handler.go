@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -27,13 +26,17 @@ func handleScoreResults(ctx context.Context, request mcp.CallToolRequest, sc *se
 	if resultsFile == "" && runID == "" {
 		return mcp.NewToolResultError("either 'run_id' or 'results_file' is required"), nil
 	}
+	if resultsFile != "" && runID != "" {
+		return mcp.NewToolResultError("provide only one of 'run_id' or 'results_file'"), nil
+	}
 
 	cfg := scorer.Config{
+		Model:       sc.ScoringModel, // from server config; falls back to DefaultScoringModel in NewScorer
 		Repetitions: 3,
 	}
 
 	if model, ok := args["scoring_model"].(string); ok && model != "" {
-		cfg.Model = model
+		cfg.Model = model // explicit parameter overrides server default
 	}
 	if reps, ok := args["repetitions"].(float64); ok && reps > 0 {
 		cfg.Repetitions = int(reps)
@@ -43,10 +46,19 @@ func handleScoreResults(ctx context.Context, request mcp.CallToolRequest, sc *se
 
 	// If run_id is specified, resolve to the results files in the run directory.
 	if runID != "" {
-		return scoreByRunID(ctx, s, sc.OutputDir, runID)
+		safeRunPath, err := resolveRunPath(sc.OutputDir, runID)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid run_id: %v", err)), nil
+		}
+		return scoreByRunID(ctx, s, runID, safeRunPath)
 	}
 
-	return scoreSingleFile(ctx, s, resultsFile)
+	safeResultsFile, err := resolveResultFilePath(sc.OutputDir, resultsFile)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid results_file: %v", err)), nil
+	}
+
+	return scoreSingleFile(ctx, s, safeResultsFile)
 }
 
 // scoreSingleFile scores a single results file.
@@ -75,9 +87,7 @@ func scoreSingleFile(ctx context.Context, s *scorer.Scorer, resultsFile string) 
 }
 
 // scoreByRunID finds all .txt result files in a run directory and scores each one.
-func scoreByRunID(ctx context.Context, s *scorer.Scorer, outputDir, runID string) (*mcp.CallToolResult, error) {
-	runPath := filepath.Join(outputDir, runID)
-
+func scoreByRunID(ctx context.Context, s *scorer.Scorer, runID, runPath string) (*mcp.CallToolResult, error) {
 	entries, err := os.ReadDir(runPath)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("run %q not found: %v", runID, err)), nil
@@ -91,7 +101,7 @@ func scoreByRunID(ctx context.Context, s *scorer.Scorer, outputDir, runID string
 		}
 		name := e.Name()
 		if strings.HasSuffix(name, ".txt") && !strings.HasSuffix(name, "_scores.txt") {
-			resultFiles = append(resultFiles, filepath.Join(runPath, name))
+			resultFiles = append(resultFiles, joinRunFile(runPath, name))
 		}
 	}
 

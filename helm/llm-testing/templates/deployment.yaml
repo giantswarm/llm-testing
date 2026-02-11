@@ -33,15 +33,31 @@ spec:
             - --suites-dir={{ .Values.server.suitesDir }}
             {{- end }}
             {{- if .Values.server.debug }}
-            - --debug
+            - --verbose
+            {{- end }}
+            {{- if .Values.scoring.model }}
+            - --scoring-model={{ .Values.scoring.model }}
+            {{- end }}
+            {{- if .Values.scoring.endpoint }}
+            - --scoring-endpoint={{ .Values.scoring.endpoint }}
             {{- end }}
             {{- if .Values.oauth.enabled }}
             - --enable-oauth
             - --oauth-base-url={{ .Values.oauth.baseURL }}
             - --oauth-provider={{ .Values.oauth.provider }}
             {{- end }}
-          {{- if .Values.oauth.enabled }}
+          {{- if or .Values.oauth.enabled .Values.scoring.apiKey .Values.scoring.existingSecret }}
           env:
+            {{- if .Values.scoring.existingSecret }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.scoring.existingSecret }}
+                  key: api-key
+            {{- else if .Values.scoring.apiKey }}
+            - name: OPENAI_API_KEY
+              value: {{ .Values.scoring.apiKey | quote }}
+            {{- end }}
             {{- if .Values.oauth.existingSecret }}
             - name: DEX_ISSUER_URL
               valueFrom:

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -81,7 +82,12 @@ func (m *Manager) CheckCRDAvailable(ctx context.Context) error {
 // Deploy creates an InferenceService and waits for it to become ready.
 func (m *Manager) Deploy(ctx context.Context, cfg ModelConfig) (*ModelStatus, error) {
 	isvc := BuildInferenceService(cfg, m.namespace)
-	name := isvc.GetName()
+	name := isvc.Name
+
+	obj, err := toUnstructured(isvc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert InferenceService: %w", err)
+	}
 
 	slog.Info("deploying InferenceService",
 		"name", name,
@@ -91,7 +97,7 @@ func (m *Manager) Deploy(ctx context.Context, cfg ModelConfig) (*ModelStatus, er
 
 	// Create the InferenceService.
 	created, err := m.client.Resource(isvcGVR).Namespace(m.namespace).Create(
-		ctx, isvc, metav1.CreateOptions{},
+		ctx, obj, metav1.CreateOptions{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create InferenceService %s: %w", name, err)
@@ -109,7 +115,7 @@ func (m *Manager) Deploy(ctx context.Context, cfg ModelConfig) (*ModelStatus, er
 	return &ModelStatus{
 		Name:        name,
 		Ready:       true,
-		EndpointURL: EndpointURL(name, m.namespace),
+		EndpointURL: endpointURL(isvc, m.namespace),
 		CreatedAt:   created.GetCreationTimestamp().Format(time.RFC3339),
 	}, nil
 }
@@ -129,6 +135,9 @@ func (m *Manager) Teardown(ctx context.Context, name string) error {
 		},
 	)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to delete InferenceService %s: %w", sanitized, err)
 	}
 
@@ -146,7 +155,12 @@ func (m *Manager) List(ctx context.Context) ([]ModelStatus, error) {
 
 	statuses := make([]ModelStatus, 0, len(list.Items))
 	for _, item := range list.Items {
-		statuses = append(statuses, m.statusFromObject(&item))
+		isvc, err := fromUnstructured(&item)
+		if err != nil {
+			slog.Warn("failed to convert InferenceService", "name", item.GetName(), "error", err)
+			continue
+		}
+		statuses = append(statuses, m.statusFromISVC(isvc))
 	}
 
 	return statuses, nil
@@ -162,20 +176,25 @@ func (m *Manager) Get(ctx context.Context, name string) (*ModelStatus, error) {
 		return nil, fmt.Errorf("failed to get InferenceService %s: %w", sanitized, err)
 	}
 
-	status := m.statusFromObject(item)
+	isvc, err := fromUnstructured(item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert InferenceService %s: %w", sanitized, err)
+	}
+
+	status := m.statusFromISVC(isvc)
 	return &status, nil
 }
 
-// statusFromObject extracts a ModelStatus from an unstructured InferenceService.
-func (m *Manager) statusFromObject(obj *unstructured.Unstructured) ModelStatus {
+// statusFromISVC extracts a ModelStatus from a typed InferenceService.
+func (m *Manager) statusFromISVC(isvc *InferenceService) ModelStatus {
 	status := ModelStatus{
-		Name:      obj.GetName(),
-		CreatedAt: obj.GetCreationTimestamp().Format(time.RFC3339),
+		Name:      isvc.Name,
+		CreatedAt: isvc.CreationTimestamp.Format(time.RFC3339),
 	}
 
-	if isReady(obj) {
+	if isvc.Status.IsReady() {
 		status.Ready = true
-		status.EndpointURL = EndpointURL(obj.GetName(), m.namespace)
+		status.EndpointURL = endpointURL(isvc, m.namespace)
 	} else {
 		status.Message = "pending"
 	}
@@ -183,47 +202,10 @@ func (m *Manager) statusFromObject(obj *unstructured.Unstructured) ModelStatus {
 	return status
 }
 
-// readyCondition describes the state of the Ready condition on an InferenceService.
-type readyCondition struct {
-	Found   bool
-	Status  string
-	Reason  string
-	Message string
-}
-
-// getReadyCondition extracts the Ready condition from an InferenceService object.
-func getReadyCondition(obj *unstructured.Unstructured) readyCondition {
-	conditions, found, _ := unstructured.NestedSlice(obj.Object, "status", "conditions")
-	if !found {
-		return readyCondition{}
-	}
-	for _, c := range conditions {
-		cond, ok := c.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if cond["type"] == "Ready" {
-			reason, _ := cond["reason"].(string)
-			message, _ := cond["message"].(string)
-			status, _ := cond["status"].(string)
-			return readyCondition{
-				Found:   true,
-				Status:  status,
-				Reason:  reason,
-				Message: message,
-			}
-		}
-	}
-	return readyCondition{}
-}
-
-// isReady checks whether an InferenceService has a Ready=True condition.
-func isReady(obj *unstructured.Unstructured) bool {
-	rc := getReadyCondition(obj)
-	return rc.Found && rc.Status == "True"
-}
-
 func (m *Manager) waitForReady(ctx context.Context, name string, timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = 10 * time.Minute
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -250,20 +232,32 @@ func (m *Manager) waitForReady(ctx context.Context, name string, timeout time.Du
 					continue
 				}
 
-				rc := getReadyCondition(obj)
-				if rc.Found && rc.Status == "True" {
+				isvc, err := fromUnstructured(obj)
+				if err != nil {
+					slog.Warn("failed to convert watch event", "error", err)
+					continue
+				}
+
+				if isvc.Status.IsReady() {
 					slog.Info("InferenceService ready", "name", name)
 					return nil
 				}
 
-				if rc.Found && rc.Status == "False" {
+				if cond := isvc.Status.GetReadyCondition(); cond != nil && cond.Status == "False" {
 					slog.Debug("InferenceService not ready yet",
 						"name", name,
-						"reason", rc.Reason,
-						"message", rc.Message,
+						"reason", cond.Reason,
+						"message", cond.Message,
 					)
 				}
 			}
 		}
 	}
+}
+
+func endpointURL(isvc *InferenceService, namespace string) string {
+	if isvc.Status.URL != "" {
+		return isvc.Status.URL
+	}
+	return EndpointURL(isvc.Name, namespace)
 }

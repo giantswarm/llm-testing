@@ -58,6 +58,7 @@ func makeISVC(name, namespace string, ready bool) *unstructured.Unstructured {
 			},
 			"status": map[string]interface{}{
 				"conditions": conditions,
+				"url":        "http://" + name + "." + namespace + ".example.com/v1",
 			},
 		},
 	}
@@ -83,7 +84,7 @@ func TestManagerList(t *testing.T) {
 	}
 	require.NotNil(t, modelA, "model-a should be in the list")
 	assert.True(t, modelA.Ready)
-	assert.Contains(t, modelA.EndpointURL, "model-a.test-namespace.svc.cluster.local")
+	assert.Equal(t, "http://model-a.test-namespace.example.com/v1", modelA.EndpointURL)
 
 	// Find model-b (not ready).
 	var modelB *ModelStatus
@@ -114,7 +115,7 @@ func TestManagerGet(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "my-model", status.Name)
 	assert.True(t, status.Ready)
-	assert.Contains(t, status.EndpointURL, "my-model.test-namespace.svc.cluster.local")
+	assert.Equal(t, "http://my-model.test-namespace.example.com/v1", status.EndpointURL)
 }
 
 func TestManagerGetNotFound(t *testing.T) {
@@ -150,7 +151,7 @@ func TestManagerTeardownNotFound(t *testing.T) {
 	m := newFakeManager(t)
 
 	err := m.Teardown(context.Background(), "nonexistent")
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
 
 func TestManagerDeploy(t *testing.T) {
@@ -223,24 +224,21 @@ func TestManagerCheckCRDNotAvailable(t *testing.T) {
 	assert.Contains(t, err.Error(), "not available")
 }
 
-func TestGetReadyCondition(t *testing.T) {
+func TestIsReady(t *testing.T) {
 	tests := []struct {
-		name       string
-		obj        *unstructured.Unstructured
-		wantFound  bool
-		wantStatus string
+		name      string
+		obj       *unstructured.Unstructured
+		wantReady bool
 	}{
 		{
-			name: "ready true",
-			obj:  makeISVC("test", "ns", true),
-			wantFound:  true,
-			wantStatus: "True",
+			name:      "ready true",
+			obj:       makeISVC("test", "ns", true),
+			wantReady: true,
 		},
 		{
-			name: "ready false",
-			obj:  makeISVC("test", "ns", false),
-			wantFound:  true,
-			wantStatus: "False",
+			name:      "ready false",
+			obj:       makeISVC("test", "ns", false),
+			wantReady: false,
 		},
 		{
 			name: "no conditions",
@@ -251,16 +249,15 @@ func TestGetReadyCondition(t *testing.T) {
 					"metadata":   map[string]interface{}{"name": "test"},
 				},
 			},
-			wantFound:  false,
-			wantStatus: "",
+			wantReady: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rc := getReadyCondition(tt.obj)
-			assert.Equal(t, tt.wantFound, rc.Found)
-			assert.Equal(t, tt.wantStatus, rc.Status)
+			isvc, err := fromUnstructured(tt.obj)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantReady, isvc.Status.IsReady())
 		})
 	}
 }

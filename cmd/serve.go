@@ -16,6 +16,7 @@ import (
 	"github.com/giantswarm/llm-testing/internal/kserve"
 	"github.com/giantswarm/llm-testing/internal/llm"
 	mcptools "github.com/giantswarm/llm-testing/internal/mcp"
+	"github.com/giantswarm/llm-testing/internal/scorer"
 	"github.com/giantswarm/llm-testing/internal/server"
 )
 
@@ -28,19 +29,22 @@ const (
 
 func newServeCmd() *cobra.Command {
 	var (
-		transport    string
-		httpAddr     string
-		httpEndpoint string
-		inCluster    bool
-		outputDir    string
-		suitesDir    string
+		transport       string
+		httpAddr        string
+		httpEndpoint    string
+		inCluster       bool
+		outputDir       string
+		suitesDir       string
+		scoringModel    string
+		scoringEndpoint string
+		apiKey          string
 
 		// OAuth options (simplified from mcp-kubernetes).
-		enableOAuth    bool
-		oauthBaseURL   string
-		oauthProvider  string
-		dexIssuerURL   string
-		dexClientID    string
+		enableOAuth     bool
+		oauthBaseURL    string
+		oauthProvider   string
+		dexIssuerURL    string
+		dexClientID     string
 		dexClientSecret string
 	)
 
@@ -60,9 +64,11 @@ When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 
 			// Build server context.
 			sc := &server.ServerContext{
-				Namespace: namespace,
-				OutputDir: outputDir,
-				SuitesDir: suitesDir,
+				Namespace:    namespace,
+				OutputDir:    outputDir,
+				SuitesDir:    suitesDir,
+				ScoringModel: scoringModel,
+				LLMAPIKey:    apiKey,
 			}
 
 			// Create KServe manager if in-cluster or kubeconfig is available.
@@ -80,7 +86,14 @@ When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 			}
 
 			// Create default LLM client (for scoring; test runs may use different endpoints).
-			sc.LLMClient = llm.NewOpenAIClient()
+			clientOpts := make([]llm.Option, 0, 2)
+			if scoringEndpoint != "" {
+				clientOpts = append(clientOpts, llm.WithBaseURL(scoringEndpoint))
+			}
+			if apiKey != "" {
+				clientOpts = append(clientOpts, llm.WithAPIKey(apiKey))
+			}
+			sc.LLMClient = llm.NewOpenAIClient(clientOpts...)
 
 			// Create MCP server.
 			mcpSrv := mcpserver.NewMCPServer("llm-testing", rootCmd.Version,
@@ -123,6 +136,9 @@ When using streamable-http transport, OAuth 2.1 authentication can be enabled.`,
 	cmd.Flags().BoolVar(&inCluster, "in-cluster", false, "Use in-cluster Kubernetes authentication")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "results", "Directory for test results")
 	cmd.Flags().StringVar(&suitesDir, "suites-dir", "", "External test suites directory (optional)")
+	cmd.Flags().StringVar(&scoringModel, "scoring-model", scorer.DefaultScoringModel, "Default model for LLM-as-judge scoring")
+	cmd.Flags().StringVar(&scoringEndpoint, "scoring-endpoint", "", "Default LLM endpoint URL for scoring and endpoint-based test runs")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for the default LLM client (falls back to OPENAI_API_KEY)")
 
 	// OAuth flags.
 	cmd.Flags().BoolVar(&enableOAuth, "enable-oauth", false, "Enable OAuth 2.1 authentication (for HTTP transport)")

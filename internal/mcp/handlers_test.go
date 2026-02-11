@@ -56,12 +56,47 @@ func TestHandleRunTestSuiteMissingRequired(t *testing.T) {
 	assert.Contains(t, content.Text, "test_suite is required")
 }
 
+func TestHandleRunTestSuiteNoClient(t *testing.T) {
+	sc := &server.ServerContext{
+		LLMClient: nil,
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"test_suite": "kubernetes-cka-v2",
+		"model":      "test-model",
+	}
+
+	result, err := handleRunTestSuite(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "LLM client is not configured")
+}
+
+func TestHandleRunTestSuiteNoModels(t *testing.T) {
+	sc := &server.ServerContext{}
+
+	// Test suite specified but no model.
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"test_suite": "kubernetes-cka-v2",
+	}
+
+	result, err := handleRunTestSuite(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "at least one model is required")
+}
+
 func TestHandleRunTestSuiteInvalidSuite(t *testing.T) {
 	sc := &server.ServerContext{}
 
 	request := mcp.CallToolRequest{}
 	request.Params.Arguments = map[string]interface{}{
 		"test_suite": "nonexistent-suite",
+		"model":      "test-model",
 	}
 
 	result, err := handleRunTestSuite(context.Background(), request, sc)
@@ -85,6 +120,24 @@ func TestHandleRunTestSuiteInvalidModelsJSON(t *testing.T) {
 
 	content := result.Content[0].(mcp.TextContent)
 	assert.Contains(t, content.Text, "invalid models JSON")
+}
+
+func TestHandleRunTestSuiteEmptyModelName(t *testing.T) {
+	sc := &server.ServerContext{
+		LLMClient: &testutil.MockLLMClient{},
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"test_suite": "kubernetes-cka-v2",
+		"models":     `[{"name":"   "}]`,
+	}
+
+	result, err := handleRunTestSuite(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "model name cannot be empty")
 }
 
 func TestHandleScoreResultsMissingRequired(t *testing.T) {
@@ -133,6 +186,60 @@ func TestHandleScoreResultsNeitherRunIDNorFile(t *testing.T) {
 
 	content := result.Content[0].(mcp.TextContent)
 	assert.Contains(t, content.Text, "either 'run_id' or 'results_file' is required")
+}
+
+func TestHandleScoreResultsBothRunIDAndFile(t *testing.T) {
+	sc := &server.ServerContext{
+		LLMClient: &testutil.MockLLMClient{},
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"run_id":       "run-1",
+		"results_file": "run-1/model.txt",
+	}
+
+	result, err := handleScoreResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "provide only one of 'run_id' or 'results_file'")
+}
+
+func TestHandleScoreResultsRunIDPathTraversal(t *testing.T) {
+	sc := &server.ServerContext{
+		LLMClient: &testutil.MockLLMClient{},
+		OutputDir: t.TempDir(),
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"run_id": "../outside",
+	}
+
+	result, err := handleScoreResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "invalid run_id")
+}
+
+func TestHandleScoreResultsFilePathTraversal(t *testing.T) {
+	sc := &server.ServerContext{
+		LLMClient: &testutil.MockLLMClient{},
+		OutputDir: t.TempDir(),
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"results_file": "../outside.txt",
+	}
+
+	result, err := handleScoreResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "invalid results_file")
 }
 
 func TestHandleScoreResultsByRunIDNotFound(t *testing.T) {
@@ -233,6 +340,23 @@ func TestHandleGetResultsSpecificRun(t *testing.T) {
 	assert.Contains(t, content.Text, "test-run")
 }
 
+func TestHandleGetResultsRunIDPathTraversal(t *testing.T) {
+	sc := &server.ServerContext{
+		OutputDir: t.TempDir(),
+	}
+
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]interface{}{
+		"run_id": "../outside",
+	}
+
+	result, err := handleGetResults(context.Background(), request, sc)
+	require.NoError(t, err)
+
+	content := result.Content[0].(mcp.TextContent)
+	assert.Contains(t, content.Text, "invalid run_id")
+}
+
 func TestHandleDeployModelNoManager(t *testing.T) {
 	sc := &server.ServerContext{
 		KServeManager: nil,
@@ -331,6 +455,8 @@ func TestHandleRunTestSuiteSuccess(t *testing.T) {
 	assert.Contains(t, summary, "suite")
 	assert.Contains(t, summary, "duration")
 	assert.Contains(t, summary, "models")
+	assert.Contains(t, summary, "deploy_enabled")
+	assert.Contains(t, summary, "progress_updates")
 
 	// The LLM client should have been called (100 questions for CKA).
 	assert.Equal(t, 100, client.Calls)
@@ -360,7 +486,7 @@ ACTUAL ANSWER: kubectl is the Kubernetes CLI
 
 	request := mcp.CallToolRequest{}
 	request.Params.Arguments = map[string]interface{}{
-		"results_file": resultsFile,
+		"results_file":  resultsFile,
 		"scoring_model": "scoring-model",
 		"repetitions":   float64(2),
 	}
@@ -401,4 +527,3 @@ func TestHandleGetResultsWithRun(t *testing.T) {
 	assert.Len(t, runs, 1)
 	assert.Equal(t, "test-run", runs[0]["id"])
 }
-

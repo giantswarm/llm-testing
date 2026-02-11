@@ -9,7 +9,9 @@ import (
 type ServerContext struct {
 	KServeManager *kserve.Manager
 	LLMClient     llm.Client
+	LLMAPIKey     string
 	Namespace     string
 	OutputDir     string
 	SuitesDir     string // external test suites directory (optional)
+	ScoringModel  string // default model for LLM-as-judge scoring
 }
