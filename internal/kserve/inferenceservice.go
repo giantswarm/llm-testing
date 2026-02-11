@@ -5,7 +5,11 @@ import (
 	"strconv"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -14,63 +18,76 @@ const (
 	managedBy  = "llm-testing"
 )
 
-// BuildInferenceService creates an unstructured InferenceService object from a ModelConfig.
-func BuildInferenceService(cfg ModelConfig, namespace string) *unstructured.Unstructured {
-	isvc := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": apiVersion,
-			"kind":       kind,
-			"metadata": map[string]interface{}{
-				"name":      sanitizeName(cfg.Name),
-				"namespace": namespace,
-				"labels": map[string]interface{}{
-					"app.kubernetes.io/managed-by": managedBy,
-					"app.kubernetes.io/name":       cfg.Name,
+// BuildInferenceService creates a typed InferenceService object from a ModelConfig.
+func BuildInferenceService(cfg ModelConfig, namespace string) *InferenceService {
+	storageURI := cfg.ModelURI
+
+	isvc := &InferenceService{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: apiVersion,
+			Kind:       kind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sanitizeName(cfg.Name),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": managedBy,
+				"app.kubernetes.io/name":       cfg.Name,
+			},
+		},
+		Spec: InferenceServiceSpec{
+			Predictor: PredictorSpec{
+				Model: &ISvcModelSpec{
+					ModelFormat: ModelFormat{
+						Name: "vLLM",
+					},
+					StorageURI: &storageURI,
 				},
 			},
-			"spec": map[string]interface{}{
-				"predictor": buildPredictor(cfg),
-			},
 		},
-	}
-
-	return isvc
-}
-
-func buildPredictor(cfg ModelConfig) map[string]interface{} {
-	model := map[string]interface{}{
-		"modelFormat": map[string]interface{}{
-			"name": "vLLM",
-		},
-		"storageUri": cfg.ModelURI,
 	}
 
 	if cfg.Runtime != "" {
-		model["runtime"] = cfg.Runtime
+		rt := cfg.Runtime
+		isvc.Spec.Predictor.Model.Runtime = &rt
 	}
 
 	if cfg.GPUCount > 0 {
-		model["resources"] = map[string]interface{}{
-			"requests": map[string]interface{}{
-				"nvidia.com/gpu": strconv.Itoa(cfg.GPUCount),
+		gpuQty := resource.MustParse(strconv.Itoa(cfg.GPUCount))
+		isvc.Spec.Predictor.Model.Resources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				"nvidia.com/gpu": gpuQty,
 			},
-			"limits": map[string]interface{}{
-				"nvidia.com/gpu": strconv.Itoa(cfg.GPUCount),
+			Limits: corev1.ResourceList{
+				"nvidia.com/gpu": gpuQty,
 			},
 		}
 	}
 
 	if len(cfg.RuntimeArgs) > 0 {
-		args := make([]interface{}, len(cfg.RuntimeArgs))
-		for i, a := range cfg.RuntimeArgs {
-			args[i] = a
-		}
-		model["args"] = args
+		isvc.Spec.Predictor.Model.Args = cfg.RuntimeArgs
 	}
 
-	return map[string]interface{}{
-		"model": model,
+	return isvc
+}
+
+// toUnstructured converts a typed InferenceService to an unstructured object
+// for use with the dynamic Kubernetes client.
+func toUnstructured(isvc *InferenceService) (*unstructured.Unstructured, error) {
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(isvc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert InferenceService to unstructured: %w", err)
 	}
+	return &unstructured.Unstructured{Object: obj}, nil
+}
+
+// fromUnstructured converts an unstructured object back to a typed InferenceService.
+func fromUnstructured(obj *unstructured.Unstructured) (*InferenceService, error) {
+	isvc := &InferenceService{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, isvc); err != nil {
+		return nil, fmt.Errorf("failed to convert unstructured to InferenceService: %w", err)
+	}
+	return isvc, nil
 }
 
 // sanitizeName converts a model name to a valid Kubernetes resource name.

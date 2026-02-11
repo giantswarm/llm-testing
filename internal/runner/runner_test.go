@@ -31,14 +31,15 @@ func TestRunnerExecutesSuite(t *testing.T) {
 	suite := &testsuite.TestSuite{
 		Name:     "test-suite",
 		Strategy: "qa",
-		Models:   []testsuite.Model{{Name: "test-model", Temperature: 0.0}},
 		Prompt:   testsuite.Prompt{SystemMessage: "You are a test assistant."},
 		Questions: []testsuite.Question{
 			{ID: "1", Section: "Test", QuestionText: "What is kubectl?", ExpectedAnswer: "CLI tool"},
 		},
 	}
 
-	run, err := r.Run(context.Background(), suite)
+	models := []testsuite.Model{{Name: "test-model", Temperature: 0.0}}
+
+	run, err := r.Run(context.Background(), suite, models)
 	require.NoError(t, err)
 
 	assert.Equal(t, "test-suite", run.Suite)
@@ -65,20 +66,42 @@ func TestRunnerMultipleModels(t *testing.T) {
 	suite := &testsuite.TestSuite{
 		Name:     "multi",
 		Strategy: "qa",
-		Models: []testsuite.Model{
-			{Name: "model-a", Temperature: 0.0},
-			{Name: "model-b", Temperature: 0.5},
-		},
-		Prompt: testsuite.Prompt{SystemMessage: "test"},
+		Prompt:   testsuite.Prompt{SystemMessage: "test"},
 		Questions: []testsuite.Question{
 			{ID: "1", Section: "S", QuestionText: "Q?", ExpectedAnswer: "A"},
 		},
 	}
 
-	run, err := r.Run(context.Background(), suite)
+	models := []testsuite.Model{
+		{Name: "model-a", Temperature: 0.0},
+		{Name: "model-b", Temperature: 0.5},
+	}
+
+	run, err := r.Run(context.Background(), suite, models)
 	require.NoError(t, err)
 	assert.Len(t, run.Models, 2)
 	assert.Equal(t, 2, client.Calls) // one per model
+}
+
+func TestRunnerNoModels(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	client := &testutil.MockLLMClient{}
+	strategy, _ := GetStrategy("qa")
+	r := NewRunner(client, strategy, tmpDir)
+
+	suite := &testsuite.TestSuite{
+		Name:     "empty",
+		Strategy: "qa",
+		Prompt:   testsuite.Prompt{SystemMessage: "test"},
+		Questions: []testsuite.Question{
+			{ID: "1", Section: "S", QuestionText: "Q?", ExpectedAnswer: "A"},
+		},
+	}
+
+	_, err := r.Run(context.Background(), suite, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no models specified")
 }
 
 func TestRunnerProgressCallback(t *testing.T) {
@@ -96,7 +119,6 @@ func TestRunnerProgressCallback(t *testing.T) {
 	suite := &testsuite.TestSuite{
 		Name:     "progress",
 		Strategy: "qa",
-		Models:   []testsuite.Model{{Name: "m", Temperature: 0}},
 		Prompt:   testsuite.Prompt{SystemMessage: "test"},
 		Questions: []testsuite.Question{
 			{ID: "1", Section: "S", QuestionText: "Q1", ExpectedAnswer: "A1"},
@@ -104,7 +126,9 @@ func TestRunnerProgressCallback(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), suite)
+	models := []testsuite.Model{{Name: "m", Temperature: 0}}
+
+	_, err := r.Run(context.Background(), suite, models)
 	require.NoError(t, err)
 	assert.Equal(t, []int{1, 2}, progressCalls)
 }
@@ -123,15 +147,16 @@ func TestRunnerContextCancellation(t *testing.T) {
 	suite := &testsuite.TestSuite{
 		Name:     "cancel",
 		Strategy: "qa",
-		Models:   []testsuite.Model{{Name: "m", Temperature: 0}},
 		Prompt:   testsuite.Prompt{SystemMessage: "test"},
 		Questions: []testsuite.Question{
 			{ID: "1", Section: "S", QuestionText: "Q", ExpectedAnswer: "A"},
 		},
 	}
 
+	models := []testsuite.Model{{Name: "m", Temperature: 0}}
+
 	// Should succeed before timeout.
-	_, err := r.Run(ctx, suite)
+	_, err := r.Run(ctx, suite, models)
 	require.NoError(t, err)
 }
 
@@ -145,14 +170,15 @@ func TestRunnerDefaultFilename(t *testing.T) {
 	suite := &testsuite.TestSuite{
 		Name:     "filename-test",
 		Strategy: "qa",
-		Models:   []testsuite.Model{{Name: "my-model", Temperature: 0}},
 		Prompt:   testsuite.Prompt{SystemMessage: "test"},
 		Questions: []testsuite.Question{
 			{ID: "1", Section: "S", QuestionText: "Q", ExpectedAnswer: "A"},
 		},
 	}
 
-	run, err := r.Run(context.Background(), suite)
+	models := []testsuite.Model{{Name: "my-model", Temperature: 0}}
+
+	run, err := r.Run(context.Background(), suite, models)
 	require.NoError(t, err)
 
 	// Verify the results file uses <model>.txt naming.
@@ -163,4 +189,36 @@ func TestRunnerDefaultFilename(t *testing.T) {
 	content, err := os.ReadFile(expectedFile)
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "NO. 1")
+}
+
+func TestRunnerAfterModelHook(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	client := &testutil.MockLLMClient{}
+	strategy, _ := GetStrategy("qa")
+	r := NewRunner(client, strategy, tmpDir)
+
+	var teardownCalls []string
+	r.SetAfterModelFunc(func(ctx context.Context, model testsuite.Model) error {
+		teardownCalls = append(teardownCalls, model.Name)
+		return nil
+	})
+
+	suite := &testsuite.TestSuite{
+		Name:     "hooks",
+		Strategy: "qa",
+		Prompt:   testsuite.Prompt{SystemMessage: "test"},
+		Questions: []testsuite.Question{
+			{ID: "1", Section: "S", QuestionText: "Q", ExpectedAnswer: "A"},
+		},
+	}
+
+	models := []testsuite.Model{
+		{Name: "model-a"},
+		{Name: "model-b"},
+	}
+
+	_, err := r.Run(context.Background(), suite, models)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"model-a", "model-b"}, teardownCalls)
 }

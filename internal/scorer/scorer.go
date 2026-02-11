@@ -16,6 +16,9 @@ import (
 	"github.com/giantswarm/llm-testing/internal/llm"
 )
 
+// DefaultScoringModel is the default model used for LLM-as-judge scoring.
+const DefaultScoringModel = "claude-sonnet-4-5-20250514"
+
 // Config holds scoring configuration.
 type Config struct {
 	Model       string
@@ -66,6 +69,9 @@ type Scorer struct {
 func NewScorer(client llm.Client, config Config) *Scorer {
 	if config.Repetitions <= 0 {
 		config.Repetitions = 3
+	}
+	if config.Model == "" {
+		config.Model = DefaultScoringModel
 	}
 	return &Scorer{client: client, config: config}
 }

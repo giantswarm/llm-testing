@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestBuildInferenceService(t *testing.T) {
@@ -19,39 +18,31 @@ func TestBuildInferenceService(t *testing.T) {
 
 	isvc := BuildInferenceService(cfg, "llm-testing")
 
-	assert.Equal(t, apiVersion, isvc.GetAPIVersion())
-	assert.Equal(t, kind, isvc.GetKind())
-	assert.Equal(t, "mistral-7b", isvc.GetName())
-	assert.Equal(t, "llm-testing", isvc.GetNamespace())
+	assert.Equal(t, apiVersion, isvc.APIVersion)
+	assert.Equal(t, kind, isvc.Kind)
+	assert.Equal(t, "mistral-7b", isvc.Name)
+	assert.Equal(t, "llm-testing", isvc.Namespace)
 
-	labels := isvc.GetLabels()
+	labels := isvc.Labels
 	assert.Equal(t, managedBy, labels["app.kubernetes.io/managed-by"])
 	assert.Equal(t, "mistral-7b", labels["app.kubernetes.io/name"])
 
 	// Verify predictor spec.
-	predictor, found, err := unstructured.NestedMap(isvc.Object, "spec", "predictor")
-	require.NoError(t, err)
-	require.True(t, found)
+	require.NotNil(t, isvc.Spec.Predictor.Model)
+	assert.Equal(t, "vLLM", isvc.Spec.Predictor.Model.ModelFormat.Name)
 
-	model, found, err := unstructured.NestedMap(predictor, "model")
-	require.NoError(t, err)
-	require.True(t, found)
+	require.NotNil(t, isvc.Spec.Predictor.Model.StorageURI)
+	assert.Equal(t, "hf://mistralai/Mistral-7B-Instruct-v0.3", *isvc.Spec.Predictor.Model.StorageURI)
 
-	storageURI, found, err := unstructured.NestedString(model, "storageUri")
-	require.NoError(t, err)
-	require.True(t, found)
-	assert.Equal(t, "hf://mistralai/Mistral-7B-Instruct-v0.3", storageURI)
-
-	runtime, found, err := unstructured.NestedString(model, "runtime")
-	require.NoError(t, err)
-	require.True(t, found)
-	assert.Equal(t, "kserve-vllm", runtime)
+	require.NotNil(t, isvc.Spec.Predictor.Model.Runtime)
+	assert.Equal(t, "kserve-vllm", *isvc.Spec.Predictor.Model.Runtime)
 
 	// Verify GPU resources.
-	gpuReq, found, err := unstructured.NestedString(model, "resources", "requests", "nvidia.com/gpu")
-	require.NoError(t, err)
-	require.True(t, found)
-	assert.Equal(t, "1", gpuReq)
+	gpuReq := isvc.Spec.Predictor.Model.Resources.Requests["nvidia.com/gpu"]
+	assert.Equal(t, "1", gpuReq.String())
+
+	gpuLim := isvc.Spec.Predictor.Model.Resources.Limits["nvidia.com/gpu"]
+	assert.Equal(t, "1", gpuLim.String())
 }
 
 func TestBuildInferenceServiceWithArgs(t *testing.T) {
@@ -65,11 +56,70 @@ func TestBuildInferenceServiceWithArgs(t *testing.T) {
 
 	isvc := BuildInferenceService(cfg, "default")
 
-	model, _, _ := unstructured.NestedMap(isvc.Object, "spec", "predictor", "model")
-	args, found, _ := unstructured.NestedSlice(model, "args")
-	require.True(t, found)
-	assert.Len(t, args, 2)
-	assert.Equal(t, "--max-model-len=4096", args[0])
+	require.NotNil(t, isvc.Spec.Predictor.Model)
+	assert.Len(t, isvc.Spec.Predictor.Model.Args, 2)
+	assert.Equal(t, "--max-model-len=4096", isvc.Spec.Predictor.Model.Args[0])
+	assert.Equal(t, "--tensor-parallel-size=4", isvc.Spec.Predictor.Model.Args[1])
+
+	// Verify GPU count.
+	gpuReq := isvc.Spec.Predictor.Model.Resources.Requests["nvidia.com/gpu"]
+	assert.Equal(t, "4", gpuReq.String())
+}
+
+func TestBuildInferenceServiceNoRuntime(t *testing.T) {
+	cfg := ModelConfig{
+		Name:     "test-model",
+		ModelURI: "hf://org/model",
+		GPUCount: 1,
+	}
+
+	isvc := BuildInferenceService(cfg, "default")
+
+	require.NotNil(t, isvc.Spec.Predictor.Model)
+	assert.Nil(t, isvc.Spec.Predictor.Model.Runtime)
+}
+
+func TestBuildInferenceServiceNoGPU(t *testing.T) {
+	cfg := ModelConfig{
+		Name:     "cpu-model",
+		ModelURI: "hf://org/model",
+	}
+
+	isvc := BuildInferenceService(cfg, "default")
+
+	require.NotNil(t, isvc.Spec.Predictor.Model)
+	assert.Empty(t, isvc.Spec.Predictor.Model.Resources.Requests)
+	assert.Empty(t, isvc.Spec.Predictor.Model.Resources.Limits)
+}
+
+func TestToFromUnstructured(t *testing.T) {
+	cfg := ModelConfig{
+		Name:        "roundtrip-test",
+		ModelURI:    "hf://org/model",
+		Runtime:     "kserve-vllm",
+		GPUCount:    2,
+		RuntimeArgs: []string{"--arg1", "--arg2"},
+	}
+
+	original := BuildInferenceService(cfg, "test-ns")
+
+	// Convert to unstructured and back.
+	obj, err := toUnstructured(original)
+	require.NoError(t, err)
+	require.NotNil(t, obj)
+
+	restored, err := fromUnstructured(obj)
+	require.NoError(t, err)
+	require.NotNil(t, restored)
+
+	// Verify the roundtrip preserved key fields.
+	assert.Equal(t, original.Name, restored.Name)
+	assert.Equal(t, original.Namespace, restored.Namespace)
+	assert.Equal(t, original.Labels, restored.Labels)
+	assert.Equal(t, original.Spec.Predictor.Model.ModelFormat.Name, restored.Spec.Predictor.Model.ModelFormat.Name)
+	assert.Equal(t, *original.Spec.Predictor.Model.StorageURI, *restored.Spec.Predictor.Model.StorageURI)
+	assert.Equal(t, *original.Spec.Predictor.Model.Runtime, *restored.Spec.Predictor.Model.Runtime)
+	assert.Equal(t, original.Spec.Predictor.Model.Args, restored.Spec.Predictor.Model.Args)
 }
 
 func TestSanitizeName(t *testing.T) {

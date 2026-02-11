@@ -3,21 +3,24 @@ package testsuite
 import "time"
 
 // TestSuite represents a loaded test suite with its configuration and questions.
+// Models are NOT part of the suite -- they are provided at runtime by the user or agent.
 type TestSuite struct {
 	Name          string     `yaml:"name"`
 	Description   string     `yaml:"description"`
 	Version       string     `yaml:"version"`
 	Strategy      string     `yaml:"strategy"` // e.g. "qa" (default)
 	QuestionsFile string     `yaml:"questions_file"`
-	Models        []Model    `yaml:"models"`
 	Prompt        Prompt     `yaml:"prompt"`
 	Questions     []Question `yaml:"-"` // loaded separately from CSV
 }
 
-// Model defines a model to test.
+// Model defines a model to test. Models are specified at runtime, not in suite config.
+// When ModelURI is set, the model can be deployed via KServe InferenceService.
 type Model struct {
-	Name        string  `yaml:"name"`
-	Temperature float64 `yaml:"temperature"`
+	Name        string  `json:"name"`
+	Temperature float64 `json:"temperature"`
+	ModelURI    string  `json:"model_uri,omitempty"`  // KServe storage URI (e.g. "hf://org/model")
+	GPUCount    int     `json:"gpu_count,omitempty"`  // GPU count for KServe deployment
 }
 
 // Prompt defines system prompt configuration for a test suite.

@@ -8,10 +8,8 @@ func Float64Ptr(v float64) *float64 {
 
 // clientConfig holds configuration for an LLM client.
 type clientConfig struct {
-	baseURL     string
-	apiKey      string
-	model       string
-	temperature *float64
+	baseURL string
+	apiKey  string
 }
 
 // Option is a functional option for configuring an LLM client.
@@ -28,21 +26,5 @@ func WithBaseURL(url string) Option {
 func WithAPIKey(key string) Option {
 	return func(c *clientConfig) {
 		c.apiKey = key
-	}
-}
-
-// WithModel sets the default model name for requests.
-// Per-request model settings in ChatRequest take precedence.
-func WithModel(model string) Option {
-	return func(c *clientConfig) {
-		c.model = model
-	}
-}
-
-// WithTemperature sets the default temperature for requests.
-// Per-request temperature settings in ChatRequest take precedence.
-func WithTemperature(temp float64) Option {
-	return func(c *clientConfig) {
-		c.temperature = &temp
 	}
 }

@@ -17,19 +17,32 @@ import (
 // ProgressFunc is called to report progress during test execution.
 type ProgressFunc func(model string, questionIndex, totalQuestions int)
 
+// ClientForModelFunc returns an LLM client configured for the given model.
+// This is called before each model's evaluation. The returned client is used
+// for all questions in that model's run. This enables the deploy -> test -> teardown
+// lifecycle: the function can deploy the model via KServe and return a client
+// pointing to its endpoint.
+type ClientForModelFunc func(ctx context.Context, model testsuite.Model) (llm.Client, error)
+
+// AfterModelFunc is called after a model's evaluation completes (or fails).
+// Use this to tear down resources like KServe InferenceServices.
+type AfterModelFunc func(ctx context.Context, model testsuite.Model) error
+
 // Runner orchestrates the execution of test suites.
 type Runner struct {
-	client    llm.Client
-	strategy  EvaluationStrategy
-	outputDir string
-	progress  ProgressFunc
+	client         llm.Client         // default client (used when clientForModel is nil)
+	clientForModel ClientForModelFunc // optional: per-model client factory (deploy + endpoint discovery)
+	afterModel     AfterModelFunc     // optional: called after each model (teardown)
+	strategy       EvaluationStrategy
+	outputDir      string
+	progress       ProgressFunc
 }
 
-// NewRunner creates a new test runner.
+// NewRunner creates a new test runner with a default LLM client.
 func NewRunner(client llm.Client, strategy EvaluationStrategy, outputDir string) *Runner {
 	return &Runner{
-		client:   client,
-		strategy: strategy,
+		client:    client,
+		strategy:  strategy,
 		outputDir: outputDir,
 	}
 }
@@ -39,8 +52,28 @@ func (r *Runner) SetProgressFunc(fn ProgressFunc) {
 	r.progress = fn
 }
 
-// Run executes a test suite for all configured models and writes results.
-func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuite.TestRun, error) {
+// SetClientForModelFunc sets the per-model client factory.
+// When set, this is called before each model's evaluation to obtain
+// a client configured for that model's endpoint.
+func (r *Runner) SetClientForModelFunc(fn ClientForModelFunc) {
+	r.clientForModel = fn
+}
+
+// SetAfterModelFunc sets the post-model callback.
+// This is called after each model's evaluation completes,
+// typically used to teardown KServe InferenceServices.
+func (r *Runner) SetAfterModelFunc(fn AfterModelFunc) {
+	r.afterModel = fn
+}
+
+// Run executes a test suite for the given models and writes results.
+// Models are processed sequentially -- important for GPU memory constraints
+// when models are deployed/torn down via KServe between evaluations.
+func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite, models []testsuite.Model) (*testsuite.TestRun, error) {
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no models specified for test run")
+	}
+
 	questions, err := r.strategy.LoadQuestions(suite)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load questions: %w", err)
@@ -60,16 +93,31 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 		ID:        runID,
 		Suite:     suite.Name,
 		Timestamp: timestamp,
-		Models:    make([]testsuite.ModelRun, 0, len(suite.Models)),
+		Models:    make([]testsuite.ModelRun, 0, len(models)),
 	}
 
 	systemPrompt := suite.Prompt.SystemMessage
 
-	for _, model := range suite.Models {
+	for _, model := range models {
 		// Check for context cancellation between models.
 		if err := ctx.Err(); err != nil {
 			slog.Warn("test run cancelled before model evaluation", "model", model.Name)
 			break
+		}
+
+		// Determine the LLM client for this model.
+		client := r.client
+		if r.clientForModel != nil {
+			var err error
+			client, err = r.clientForModel(ctx, model)
+			if err != nil {
+				slog.Error("failed to get client for model", "model", model.Name, "error", err)
+				// If we have an afterModel hook, call it to clean up.
+				if r.afterModel != nil {
+					_ = r.afterModel(ctx, model)
+				}
+				return nil, fmt.Errorf("failed to prepare model %s: %w", model.Name, err)
+			}
 		}
 
 		slog.Info("running test suite",
@@ -92,7 +140,7 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 				r.progress(model.Name, i+1, len(questions))
 			}
 
-			result, err := r.strategy.Execute(ctx, r.client, model.Name, q, systemPrompt, model.Temperature)
+			result, err := r.strategy.Execute(ctx, client, model.Name, q, systemPrompt, model.Temperature)
 			if err != nil {
 				slog.Error("question execution failed",
 					"question_id", q.ID,
@@ -105,7 +153,6 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 		}
 
 		// Write results file.
-		// Sanitize model name for safe use in filenames (e.g. "org/model" -> "org_model").
 		output := r.strategy.FormatResults(results)
 		safeModelName := sanitizeFilename(model.Name)
 		resultsFile := filepath.Join(outputPath, fmt.Sprintf("%s.txt", safeModelName))
@@ -126,6 +173,14 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 			"questions_answered", len(results),
 			"duration", modelRun.Duration,
 		)
+
+		// Call afterModel hook (e.g. teardown KServe InferenceService).
+		if r.afterModel != nil {
+			if err := r.afterModel(ctx, model); err != nil {
+				slog.Error("after-model hook failed", "model", model.Name, "error", err)
+				// Continue with next model; don't fail the entire run.
+			}
+		}
 	}
 
 	run.Duration = time.Since(timestamp)

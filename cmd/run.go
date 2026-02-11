@@ -27,10 +27,16 @@ func newRunCmd() *cobra.Command {
 		Use:   "run <test-suite>",
 		Short: "Run a test suite against an LLM endpoint",
 		Long: `Execute a test suite by sending questions to an LLM and recording the responses.
+The model to test must be specified via --model. Models are NOT part of the test
+suite configuration -- test suites only define the questions and evaluation strategy.
 
 Results are written to the output directory as text files with a JSON metadata manifest.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if model == "" {
+				return fmt.Errorf("--model is required: specify the model to test")
+			}
+
 			ctx := cmd.Context()
 			if timeout > 0 {
 				var cancel context.CancelFunc
@@ -45,10 +51,7 @@ Results are written to the output directory as text files with a JSON metadata m
 				return fmt.Errorf("failed to load test suite: %w", err)
 			}
 
-			// Override model if specified via flag.
-			if model != "" {
-				suite.Models = []testsuite.Model{{Name: model, Temperature: temperature}}
-			}
+			models := []testsuite.Model{{Name: model, Temperature: temperature}}
 
 			// Set up LLM client.
 			client := newLLMClientFromFlags(endpoint, apiKey)
@@ -65,13 +68,10 @@ Results are written to the output directory as text files with a JSON metadata m
 
 			fmt.Printf("Test Suite: %s\n", suite.Name)
 			fmt.Printf("Description: %s\n", suite.Description)
-			fmt.Printf("Models to test: %d\n", len(suite.Models))
-			for i, m := range suite.Models {
-				fmt.Printf("  %d. %s (temperature: %.1f)\n", i+1, m.Name, m.Temperature)
-			}
+			fmt.Printf("Model: %s (temperature: %.1f)\n", model, temperature)
 			fmt.Println()
 
-			run, err := r.Run(ctx, suite)
+			run, err := r.Run(ctx, suite, models)
 			if err != nil {
 				return err
 			}
@@ -89,7 +89,7 @@ Results are written to the output directory as text files with a JSON metadata m
 		},
 	}
 
-	cmd.Flags().StringVar(&model, "model", "", "Model name (overrides suite config)")
+	cmd.Flags().StringVar(&model, "model", "", "Model name to test (required)")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "LLM API endpoint URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key (or set OPENAI_API_KEY)")
 	cmd.Flags().Float64Var(&temperature, "temperature", 0.0, "Temperature for generation")
