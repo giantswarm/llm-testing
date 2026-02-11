@@ -66,6 +66,12 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 	systemPrompt := suite.Prompt.SystemMessage
 
 	for _, model := range suite.Models {
+		// Check for context cancellation between models.
+		if err := ctx.Err(); err != nil {
+			slog.Warn("test run cancelled before model evaluation", "model", model.Name)
+			break
+		}
+
 		slog.Info("running test suite",
 			"model", model.Name,
 			"questions", len(questions),
@@ -76,6 +82,12 @@ func (r *Runner) Run(ctx context.Context, suite *testsuite.TestSuite) (*testsuit
 		var results []*testsuite.Result
 
 		for i, q := range questions {
+			// Check for context cancellation between questions.
+			if err := ctx.Err(); err != nil {
+				slog.Warn("test run cancelled", "model", model.Name, "completed", i, "total", len(questions))
+				break
+			}
+
 			if r.progress != nil {
 				r.progress(model.Name, i+1, len(questions))
 			}
