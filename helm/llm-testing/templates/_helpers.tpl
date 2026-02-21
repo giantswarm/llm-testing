@@ -29,6 +29,7 @@ helm.sh/chart: {{ include "llm-testing.name" . }}-{{ .Chart.Version | replace "+
 {{ include "llm-testing.selectorLabels" . }}
 app.kubernetes.io/version: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+application.giantswarm.io/team: {{ index .Chart.Annotations "application.giantswarm.io/team" | quote }}
 {{- end }}
 
 {{/*
