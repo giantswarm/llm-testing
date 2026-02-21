@@ -4,6 +4,7 @@ description: LLM evaluation testing framework with MCP server and KServe integra
 type: application
 version: 0.1.0
 appVersion: "0.0.1"
+icon: https://s.giantswarm.io/app-icons/1/png/generic-app-icon.png
 home: https://github.com/giantswarm/llm-testing
 sources:
   - https://github.com/giantswarm/llm-testing
