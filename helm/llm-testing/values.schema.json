@@ -10,6 +10,15 @@
         "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
       }
     },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        }
+      }
+    },
     "replicaCount": { "type": "integer", "minimum": 1 },
     "namespace": { "type": "string" },
     "nameOverride": { "type": "string" },
@@ -124,6 +133,31 @@
           }
         },
         "tls": { "type": "array" }
+      }
+    },
+    "gatewayAPI": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "httpRoute": {
+          "type": "object",
+          "properties": {
+            "parentRefs": { "type": "array" },
+            "hostnames": { "type": "array", "items": { "type": "string" } },
+            "rules": { "type": "array" },
+            "annotations": { "type": "object" },
+            "labels": { "type": "object" }
+          }
+        },
+        "backendTrafficPolicy": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "timeout": { "type": "string" },
+            "annotations": { "type": "object" },
+            "labels": { "type": "object" }
+          }
+        }
       }
     },
     "nodeSelector": { "type": "object" },
