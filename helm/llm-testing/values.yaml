@@ -3,6 +3,8 @@ image:
   tag: ""  # defaults to chart appVersion
   pullPolicy: IfNotPresent
 
+imagePullSecrets: []
+
 replicaCount: 1
 
 namespace: llm-testing
@@ -79,6 +81,20 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
+
+gatewayAPI:
+  enabled: false
+  httpRoute:
+    parentRefs: []
+    hostnames: []
+    rules: []
+    annotations: {}
+    labels: {}
+  backendTrafficPolicy:
+    enabled: false
+    timeout: "300s"
+    annotations: {}
+    labels: {}
 
 nodeSelector: {}
 tolerations: []
