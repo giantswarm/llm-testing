@@ -7,3 +7,5 @@ appVersion: "0.0.1"
 home: https://github.com/giantswarm/llm-testing
 sources:
   - https://github.com/giantswarm/llm-testing
+annotations:
+  application.giantswarm.io/team: planeteers
