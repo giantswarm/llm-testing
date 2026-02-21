@@ -27,11 +27,11 @@ type Config struct {
 
 // RunScore represents the parsed result of a single scoring run.
 type RunScore struct {
-	Correct   *int    `json:"correct"`
-	Total     *int    `json:"total"`
+	Correct   *int     `json:"correct"`
+	Total     *int     `json:"total"`
 	Percent   *float64 `json:"percentage"`
-	RawOutput string  `json:"raw_output"`
-	ParseErr  string  `json:"parse_error,omitempty"`
+	RawOutput string   `json:"raw_output"`
+	ParseErr  string   `json:"parse_error,omitempty"`
 }
 
 // ScoreOutput is the full structured scoring output.
@@ -51,12 +51,12 @@ type ScoreMetadata struct {
 
 // Summary holds aggregate statistics from multiple scoring runs.
 type Summary struct {
-	MeanCorrect  *float64 `json:"mean_correct"`
-	MeanPercent  *float64 `json:"mean_percentage"`
-	MinCorrect   *int     `json:"min_correct"`
-	MaxCorrect   *int     `json:"max_correct"`
-	Variance     *float64 `json:"variance"`
-	AllRunsParsed bool    `json:"all_runs_parsed"`
+	MeanCorrect   *float64 `json:"mean_correct"`
+	MeanPercent   *float64 `json:"mean_percentage"`
+	MinCorrect    *int     `json:"min_correct"`
+	MaxCorrect    *int     `json:"max_correct"`
+	Variance      *float64 `json:"variance"`
+	AllRunsParsed bool     `json:"all_runs_parsed"`
 }
 
 // Scorer evaluates test results using an LLM as judge.

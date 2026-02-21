@@ -32,3 +32,29 @@ helm-lint: ## Lint the Helm chart.
 .PHONY: helm-template
 helm-template: ## Template the Helm chart for validation.
 	helm template llm-testing helm/llm-testing/
+
+##@ Release
+
+.PHONY: release-dry-run
+release-dry-run: ## Test the release process without publishing (all platforms)
+	goreleaser release --snapshot --clean --skip=announce,publish,validate
+
+.PHONY: release-dry-run-fast
+release-dry-run-fast: ## Fast release dry-run for CI (linux/amd64 only)
+	goreleaser release --config .goreleaser.ci.yaml --snapshot --clean --skip=announce,publish,validate
+
+.PHONY: release-local
+release-local: ## Create a release locally
+	goreleaser release --clean
+
+##@ Security
+
+.PHONY: govulncheck
+govulncheck: ## Run govulncheck to scan for known vulnerabilities
+	@command -v govulncheck >/dev/null 2>&1 || { echo "Installing govulncheck..."; go install golang.org/x/vuln/cmd/govulncheck@latest; }
+	govulncheck ./...
+
+##@ Checks
+
+.PHONY: check
+check: lint test vet ## Run linter, tests, and vet

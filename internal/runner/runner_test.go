@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/giantswarm/llm-testing/internal/testutil"
 	"github.com/giantswarm/llm-testing/internal/testsuite"
+	"github.com/giantswarm/llm-testing/internal/testutil"
 )
 
 func TestRunnerExecutesSuite(t *testing.T) {
