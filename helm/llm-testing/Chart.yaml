@@ -4,7 +4,7 @@ description: LLM evaluation testing framework with MCP server and KServe integra
 type: application
 version: 0.1.0
 appVersion: "0.0.1"
-icon: https://raw.githubusercontent.com/giantswarm/llm-testing/autorelease-circleci-workflows/icon.png
+icon: https://s.giantswarm.io/app-icons/giantswarm/1/light.svg
 home: https://github.com/giantswarm/llm-testing
 sources:
   - https://github.com/giantswarm/llm-testing
