@@ -1,23 +1,31 @@
-name: CI
+---
+# yamllint disable rule:truthy
+name: CI Checks
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    branches: [main]
+    branches:
+      - main
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  check:
+    name: Lint and Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Lint
         uses: golangci/golangci-lint-action@v7
@@ -28,16 +36,26 @@ jobs:
       - name: Test
         run: go test -race ./...
 
-      - name: Build
-        run: go build -trimpath -o llm-testing .
-
       - name: Vet
         run: go vet ./...
 
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          install-only: true
+
+      - name: Run Release Dry-Run
+        if: github.event_name == 'pull_request'
+        run: make release-dry-run-fast
+
   helm:
+    name: Helm Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
 
       - name: Helm Lint
         run: helm lint helm/llm-testing/
@@ -46,13 +64,17 @@ jobs:
         run: helm template llm-testing helm/llm-testing/
 
   security:
+    name: Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Govulncheck
         run: |
