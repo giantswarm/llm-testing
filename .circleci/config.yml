@@ -1,24 +1,90 @@
 version: 2.1
-
 orbs:
-  architect: giantswarm/architect@6.8.0
+  architect: giantswarm/architect@6.14.0
 
 workflows:
   build:
     jobs:
-      - architect/go-build:
-          name: go-build
-          filters:
-            tags:
-              only: /^v.*/
+    - architect/go-build:
+        name: go-build-llm-testing
+        binary: llm-testing
+        filters:
+          tags:
+            only: /^v.*/
 
-      - architect/push-to-registries:
-          name: push-to-registries
-          context: architect
-          requires:
-            - go-build
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
+    # Branch builds: amd64 only for faster PR feedback
+    - architect/push-to-registries-multiarch:
+        context: architect
+        name: push-to-registries
+        platforms: "linux/amd64"
+        resource_class: medium
+        requires:
+        - go-build-llm-testing
+        filters:
+          branches:
+            ignore:
+            - main
+
+    # Tag builds: full multi-arch (amd64 + arm64)
+    - architect/push-to-registries-multiarch:
+        context: architect
+        name: push-to-registries-release
+        requires:
+        - go-build-llm-testing
+        filters:
+          tags:
+            only: /^v.*/
+          branches:
+            ignore: /.*/
+
+    - architect/push-to-app-catalog:
+        executor: app-build-suite
+        context: architect
+        name: build-llm-testing-chart
+        app_catalog: giantswarm-catalog
+        app_catalog_test: giantswarm-test-catalog
+        chart: llm-testing
+        push_to_appcatalog: false
+        push_to_oci_registry: false
+        persist_chart_archive: true
+        requires:
+        - go-build-llm-testing
+        filters:
+          tags:
+            only: /^v.*/
+          branches:
+            ignore:
+            - main
+
+    # Branch: push chart after amd64 images
+    - architect/push-to-app-catalog:
+        executor: app-build-suite
+        context: architect
+        name: push-llm-testing-to-giantswarm-app-catalog
+        app_catalog: giantswarm-catalog
+        app_catalog_test: giantswarm-test-catalog
+        chart: llm-testing
+        requires:
+        - build-llm-testing-chart
+        - push-to-registries
+        filters:
+          branches:
+            ignore:
+            - main
+
+    # Tag: push chart after multi-arch images
+    - architect/push-to-app-catalog:
+        executor: app-build-suite
+        context: architect
+        name: push-llm-testing-to-giantswarm-app-catalog-release
+        app_catalog: giantswarm-catalog
+        app_catalog_test: giantswarm-test-catalog
+        chart: llm-testing
+        requires:
+        - build-llm-testing-chart
+        - push-to-registries-release
+        filters:
+          tags:
+            only: /^v.*/
+          branches:
+            ignore: /.*/

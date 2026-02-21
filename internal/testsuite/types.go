@@ -19,8 +19,8 @@ type TestSuite struct {
 type Model struct {
 	Name        string  `json:"name"`
 	Temperature float64 `json:"temperature"`
-	ModelURI    string  `json:"model_uri,omitempty"`  // KServe storage URI (e.g. "hf://org/model")
-	GPUCount    int     `json:"gpu_count,omitempty"`  // GPU count for KServe deployment
+	ModelURI    string  `json:"model_uri,omitempty"` // KServe storage URI (e.g. "hf://org/model")
+	GPUCount    int     `json:"gpu_count,omitempty"` // GPU count for KServe deployment
 }
 
 // Prompt defines system prompt configuration for a test suite.
